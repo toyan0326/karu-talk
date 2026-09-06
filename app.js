@@ -619,6 +619,15 @@ function refreshHome() {
   $('hTtfw').textContent = t == null ? '–' : t.toFixed(1);
   $('hWpm').textContent = w == null ? '–' : Math.round(w);
   const n = S.chunks.filter(c => (c.used || 0) < 3).length;
+  if (!window.isSecureContext || !navigator.mediaDevices) {
+    // http://192.168.x.x のような素のHTTPではブラウザがマイクを一切渡してくれない。
+    // ここで先に言わないと「開始」を押してから初めて詰まる。
+    $('homeNote').innerHTML = '⚠ このURLはHTTPSではないためマイクが使えません<br>'
+      + '<span style="color:var(--dim2)">HTTPSで開くか、Mac上の http://localhost で開いてください</span>';
+    $('btnStart').disabled = true;
+    return;
+  }
+  $('btnStart').disabled = false;
   $('homeNote').textContent = S.settings.apiKey.trim()
     ? (n ? `マイチャンク ${n}個が出番待ち` : '')
     : '⚠ 設定でAPIキーを入れると添削が出ます';
