@@ -94,8 +94,9 @@ function speak(text, rate = 0.95) {
 
 /* ════════ マイク（録音＋音量からの発話検出） ════════ */
 const Mic = {
-  stream: null, rec: null, chunks: [], mime: '', ac: null, analyser: null, buf: null, raf: 0,
-  rms: 0, floor: 0.006, onVoice: null, onLevel: null, voicedFrames: 0, src: null,
+  stream: null, rec: null, chunks: [], mime: '', ac: null,
+  rms: 0, floor: 0.006, onVoice: null, onLevel: null, voicedFrames: 0,
+  src: null, proc: null, mute: null,
 
   // iOSはユーザー操作の「中」でしかAudioContextを起こせない。
   // awaitを挟むと操作扱いが切れるので、タップハンドラの同期部分から必ずこれを呼ぶ。
@@ -122,57 +123,76 @@ const Mic = {
     });
     this.mime = this.pickMime();
     this.chunks = [];
-    this.rec = new MediaRecorder(this.stream, this.mime ? { mimeType: this.mime } : undefined);
+    // 音声はビットレートを絞る。話し声には24kbpsで十分で、送信量が減るぶん添削が早く返る。
+    const recOpts = { audioBitsPerSecond: 24000 };
+    if (this.mime) recOpts.mimeType = this.mime;
+    this.rec = new MediaRecorder(this.stream, recOpts);
     this.rec.ondataavailable = e => { if (e.data && e.data.size) this.chunks.push(e.data); };
     this.rec.start(250);
 
     this.ensureCtx();
     if (this.ac.state === 'suspended') { try { await this.ac.resume(); } catch {} }
     this.src = this.ac.createMediaStreamSource(this.stream);
-    this.analyser = this.ac.createAnalyser();
-    this.analyser.fftSize = 1024;
-    this.src.connect(this.analyser);
-    this.buf = new Float32Array(this.analyser.fftSize);
 
-    // 最初の400msでノイズフロアを測る
-    this.floor = 0.006; this.voicedFrames = 0;
+    // 発話検出はオーディオスレッド駆動にする。requestAnimationFrame だと画面が暗転した
+    // ときや裏に回ったときに止まってしまい、出だし秒の計測が壊れる。
+    // ScriptProcessorNode は非推奨だが iOS Safari を含めどこでも動くのでこれを使う。
+    const N = 1024;
+    this.proc = this.ac.createScriptProcessor(N, 1, 1);
+    this.mute = this.ac.createGain();
+    this.mute.gain.value = 0;                 // マイクをスピーカーに返さない
+    this.src.connect(this.proc);
+    this.proc.connect(this.mute);
+    this.mute.connect(this.ac.destination);
+
+    this.floor = 0.006;
+    this.voicedFrames = 0;
     const floorSamples = [];
     const t0 = performance.now();
-    let hits = 0, fired = false;
+    let hits = 0, fired = false, lastUi = 0;
 
-    const loop = () => {
-      this.raf = requestAnimationFrame(loop);
-      this.analyser.getFloatTimeDomainData(this.buf);
-      let s = 0;
-      for (let i = 0; i < this.buf.length; i++) s += this.buf[i] * this.buf[i];
-      const rms = Math.sqrt(s / this.buf.length);
+    this.proc.onaudioprocess = (e) => {
+      const d = e.inputBuffer.getChannelData(0);
+      let sum = 0;
+      for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+      const rms = Math.sqrt(sum / d.length);
       this.rms = rms;
       const el = performance.now() - t0;
+
+      // 最初の400msでノイズフロアを測る（環境音の大小に自動で追従させる）
       if (el < 400) { floorSamples.push(rms); }
       else if (floorSamples.length) {
         floorSamples.sort((a, b) => a - b);
-        this.floor = Math.max(0.004, floorSamples[Math.floor(floorSamples.length / 2)] * 2.5);
+        this.floor = Math.max(0.004, floorSamples[Math.floor(floorSamples.length / 2)] * 3);
         floorSamples.length = 0;
       }
       const th = Math.max(this.floor, 0.012);
-      if (rms > th) { hits++; this.voicedFrames++; } else { hits = 0; }
-      if (this.onLevel) this.onLevel(Math.min(100, Math.sqrt(rms / 0.14) * 100), rms > th);
-      // 3フレーム(≒50ms)続けてしきい値超え＝話し始めた
-      if (!fired && hits >= 3 && el > 250) { fired = true; if (this.onVoice) this.onVoice(); }
+      const hot = rms > th;
+      if (hot) { hits++; this.voicedFrames++; } else { hits = 0; }
+
+      if (this.onLevel && el - lastUi > 66) {   // 描画は15Hzで十分
+        lastUi = el;
+        this.onLevel(Math.min(100, Math.sqrt(rms / 0.14) * 100), hot);
+      }
+      // 3フレーム(≒64ms)続けてしきい値超え＝話し始めた
+      if (!fired && hits >= 3 && el > 420) { fired = true; if (this.onVoice) this.onVoice(); }
     };
-    loop();
   },
 
   async stop() {
-    cancelAnimationFrame(this.raf); this.raf = 0;
+    if (this.proc) this.proc.onaudioprocess = null;
     const blob = await new Promise(resolve => {
       if (!this.rec || this.rec.state === 'inactive') return resolve(null);
       this.rec.onstop = () => resolve(new Blob(this.chunks, { type: this.mime || 'audio/webm' }));
       this.rec.stop();
     });
     try { this.stream && this.stream.getTracks().forEach(t => t.stop()); } catch {}
-    try { this.src && this.src.disconnect(); } catch {}   // acはセッション中つないだままにする
-    this.src = null; this.stream = null; this.rec = null;
+    // acはセッション中つないだままにする（iOSは作り直しが効かないことがある）
+    try { this.src && this.src.disconnect(); } catch {}
+    try { this.proc && this.proc.disconnect(); } catch {}
+    try { this.mute && this.mute.disconnect(); } catch {}
+    this.src = this.proc = this.mute = null;
+    this.stream = null; this.rec = null;
     this.onVoice = null; this.onLevel = null;
     return blob;
   },
