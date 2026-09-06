@@ -4,7 +4,8 @@
 cd "$(dirname "$0")" || exit 1
 PORT=8772
 if ! nc -z 127.0.0.1 $PORT 2>/dev/null; then
-  python3 -m http.server $PORT --bind 127.0.0.1 >/dev/null 2>&1 &
+  nohup python3 -m http.server $PORT --bind 127.0.0.1 >/dev/null 2>&1 &
+  disown
   sleep 1
 fi
 open "http://localhost:$PORT/index.html"

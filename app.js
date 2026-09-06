@@ -518,6 +518,16 @@ function showFeedback(local, fb, note) {
   let h = '';
   if (note) h += `<div class="card"><div class="muted">${esc(note)}</div></div>`;
 
+  // 録れてはいるのに文字起こしが空＝音が小さすぎたか、端末の録音形式が読めなかった場合。
+  // 黙って空の結果を出すと原因が分からないので明示する。
+  if (fb && !String(fb.transcript || '').trim()) {
+    h += `<div class="card" style="border-color:#5a3a2a">
+      <div style="font-size:15px">🎤 音声を聞き取れませんでした</div>
+      <div class="muted" style="margin-top:6px">マイクに近づくか、静かな場所で試してください。
+      何度も続くようなら端末の録音形式（${esc((Mic.mime || '不明').split(';')[0])}）が原因かもしれません。</div>
+    </div>`;
+  }
+
   if (fb) {
     if (fb.praise) h += `<div class="card" style="border-color:#2a4a38"><div style="font-size:15px">👍 ${esc(fb.praise)}</div></div>`;
 

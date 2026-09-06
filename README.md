@@ -38,13 +38,20 @@ manifest.webmanifest, icon-*.png   ホーム画面に追加するため
 
 - **出だし秒(TTFW)の計測**: Web Audio の ScriptProcessorNode（＝オーディオスレッド駆動）でRMSを監視し、
   最初の400msでノイズフロアを測ってから、しきい値超えが3フレーム(≒64ms)続いた瞬間を「話し始めた」と判定する。
-  音声認識にもネットにも依存しない。requestAnimationFrame を使うと画面が暗転／裏に回った瞬間に検出が止まり、
-  カウンタだけ進んで計測が壊れるので、意図的にオーディオ側で回している。
+  音声認識にもネットにも依存しない。requestAnimationFrame だと**タブが裏に回った瞬間に検出だけが止まり、
+  カウンタは進み続けて計測が壊れる**（実際にこの環境で踏んだ）ので、意図的にオーディオ側で回している。
+  ただし iOS はバックグラウンドで AudioContext 自体を止めるので、裏に回れば結局止まる。前面にある間の話。
   検証: 2.000秒ちょうどに音声を流し込んで **実測2.09秒**（誤差0.09秒＝3フレームぶんの確認遅れ＋発話の立ち上がり）。
 - **文字起こし＋添削**: MediaRecorder で録った音声を Gemini に1回だけ投げる（`responseSchema` でJSON固定）。
   webm/opus・mp4/aac のどちらでも通ることを実測済み。ドリル中は通信を待たせない設計。
   録音は 24kbps（話し声には十分）。既定ビットレートのままだと10秒の録音が99KBになり応答14.6秒だったのが、
   24kbpsで18KB・**4.6秒**になった。書き起こし結果は同一。
+  実測した組み合わせ:
+
+  | 音声 | 結果 |
+  |---|---|
+  | Chrome の MediaRecorder が実際に吐いた webm/opus | 書き起こし一致・4.6秒 |
+  | fragmented MP4 + AAC（**Safari の MediaRecorder が吐く形式**） | 書き起こし一致・3.0秒 |
 - **APIキー未設定でも動く**: 出だし秒・話した秒数だけを記録して回せる。続けられることを優先。
 - 記録はすべて `localStorage`（`karutalk.v1`）。外に送られるのは録音した音声とAPIキーだけで、送り先はGoogleのGemini APIのみ。
 
@@ -76,5 +83,9 @@ cd ~/dev/karu-talk && python3 -m http.server 8772
 cd ~/dev/karu-talk && cp index.html app.js prompts.js manifest.json icon-*.png /Volumes/web/karu-talk/
 ```
 
-**`index.html` の `?v=N` を必ず上げること。** iPhoneのSafariは `app.js` を強くキャッシュするので、
+**`index.html` の `?v=N` を必ず上げること。** Safariは `app.js` を強くキャッシュするので、
 上げないと古いコードのまま動く（実際にこれで一度ハマった）。
+
+ただし `index.html` 自体にはバージョンが無いので、**index がキャッシュされていると `?v=N` の更新自体が届かない**。
+ホーム画面に追加したアプリで更新が反映されないときは、Safariで一度開き直す（または設定→Safari→履歴とデータを消去）。
+確実にやるなら Web Station 側で `index.html` に `Cache-Control: no-cache` を付ける。
