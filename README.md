@@ -69,3 +69,12 @@ cd ~/dev/karu-talk && python3 -m http.server 8772
 
 完璧な文を作ってから話し始めるのをやめる。`Well, ...` `The thing is, ...` `Let me think for a second.`
 で先に口を動かす。内容は後からついてくる。出だしのグラフが下がっていれば、それが効いている証拠。
+
+## 更新のしかた（NAS配信時）
+
+```bash
+cd ~/dev/karu-talk && cp index.html app.js prompts.js manifest.json icon-*.png /Volumes/web/karu-talk/
+```
+
+**`index.html` の `?v=N` を必ず上げること。** iPhoneのSafariは `app.js` を強くキャッシュするので、
+上げないと古いコードのまま動く（実際にこれで一度ハマった）。
