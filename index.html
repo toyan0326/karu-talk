@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>KaruTalk — 英語の瞬発力ドリル</title>
+<meta name="theme-color" content="#0e1116">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KaruTalk">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root{
+    --bg:#0e1116; --bg2:#161b23; --line:#242c38;
+    --fg:#e9edf3; --dim:#93a0b4; --dim2:#66748a;
+    --accent:#4dd08a; --accent2:#3ba0ff; --warn:#ffb020; --bad:#ff5f56;
+    --r:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    font-size:16px; line-height:1.6; overscroll-behavior:none;
+  }
+  #app{
+    max-width:560px; margin:0 auto; min-height:100%;
+    display:flex; flex-direction:column;
+    padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 12px);
+  }
+  .screen{display:none; flex:1; flex-direction:column}
+  .screen.on{display:flex}
+
+  /* --- 共通パーツ --- */
+  header.bar{display:flex; align-items:center; gap:10px; padding:14px 0 6px; min-height:56px}
+  header.bar h1{font-size:17px; margin:0; font-weight:700; letter-spacing:.02em}
+  header.bar .sp{flex:1}
+  .iconbtn{
+    background:none; border:0; color:var(--dim); font-size:15px; padding:8px 10px;
+    border-radius:10px; cursor:pointer;
+  }
+  .iconbtn:active{background:var(--bg2)}
+  .card{background:var(--bg2); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin-bottom:12px}
+  .muted{color:var(--dim); font-size:13px}
+  .muted2{color:var(--dim2); font-size:12px}
+  button.primary{
+    width:100%; padding:18px; border:0; border-radius:var(--r); cursor:pointer;
+    background:var(--accent); color:#06210f; font-size:18px; font-weight:800;
+    font-family:inherit;
+  }
+  button.primary:active{filter:brightness(.9)}
+  button.primary[disabled]{opacity:.4}
+  button.ghost{
+    width:100%; padding:14px; border:1px solid var(--line); border-radius:var(--r);
+    background:transparent; color:var(--fg); font-size:15px; font-family:inherit; cursor:pointer;
+  }
+  button.ghost:active{background:var(--bg2)}
+  .row{display:flex; gap:10px}
+  .row>*{flex:1}
+  .foot{margin-top:auto; padding-top:14px}
+
+  /* --- ホーム --- */
+  .hero{text-align:center; padding:18px 0 6px}
+  .hero .logo{font-size:34px; font-weight:800; letter-spacing:-.02em; margin:0}
+  .hero .sub{color:var(--dim); font-size:13px; margin-top:2px}
+  .stats3{display:flex; gap:8px; margin-bottom:12px}
+  .stat{flex:1; background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:12px 8px; text-align:center}
+  .stat .v{font-size:24px; font-weight:800; line-height:1.2}
+  .stat .k{font-size:11px; color:var(--dim2); margin-top:2px}
+  .modes{display:flex; flex-direction:column; gap:10px; margin-bottom:12px}
+  .mode{
+    display:flex; align-items:center; gap:14px; text-align:left; width:100%;
+    background:var(--bg2); border:1px solid var(--line); border-radius:var(--r);
+    padding:16px; color:var(--fg); font-family:inherit; cursor:pointer;
+  }
+  .mode.sel{border-color:var(--accent); background:#13251c}
+  .mode .em{font-size:26px}
+  .mode .t{font-weight:700; font-size:16px}
+  .mode .d{font-size:12.5px; color:var(--dim)}
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  .chip{
+    padding:8px 14px; border-radius:999px; border:1px solid var(--line);
+    background:var(--bg2); color:var(--dim); font-size:13.5px; font-family:inherit; cursor:pointer;
+  }
+  .chip.on{background:var(--accent); border-color:var(--accent); color:#06210f; font-weight:700}
+
+  /* --- ドリル画面 --- */
+  #drill{justify-content:space-between}
+  .progressdots{display:flex; gap:6px; justify-content:center; padding:10px 0}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--line)}
+  .dot.done{background:var(--accent)}
+  .dot.now{background:var(--fg)}
+  .stage{flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center; gap:18px; padding:8px 0}
+  .qlabel{font-size:12px; color:var(--dim2); letter-spacing:.14em; text-transform:uppercase}
+  .q{font-size:27px; line-height:1.45; font-weight:700; letter-spacing:-.01em}
+  .qja{font-size:13.5px; color:var(--dim2)}
+  .target{font-size:13px; color:var(--accent2)}
+
+  .ring{position:relative; width:168px; height:168px; margin:0 auto}
+  .ring svg{transform:rotate(-90deg)}
+  .ring .mid{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:2px;
+  }
+  .ring .big{font-size:44px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1}
+  .ring .lbl{font-size:11.5px; color:var(--dim)}
+  .meter{height:6px; background:var(--bg2); border-radius:99px; overflow:hidden; margin:0 auto; width:170px}
+  .meter i{display:block; height:100%; width:0%; background:var(--accent); transition:width .06s linear}
+  .status{font-size:14px; color:var(--dim); min-height:22px}
+  .status.hot{color:var(--accent)}
+  .status.late{color:var(--warn)}
+
+  /* --- フィードバック --- */
+  .scorerow{display:flex; gap:8px; margin-bottom:12px}
+  .score{flex:1; background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:12px 6px; text-align:center}
+  .score .v{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
+  .score .k{font-size:10.5px; color:var(--dim2)}
+  .score.good .v{color:var(--accent)}
+  .score.warn .v{color:var(--warn)}
+  .sect{font-size:12px; color:var(--dim2); letter-spacing:.1em; margin:0 0 8px; text-transform:uppercase}
+  .fix{padding:10px 0; border-bottom:1px solid var(--line)}
+  .fix:last-child{border-bottom:0}
+  .fix .b{color:var(--bad); text-decoration:line-through; font-size:14.5px}
+  .fix .a{color:var(--accent); font-size:15.5px; font-weight:600}
+  .fix .w{font-size:12.5px; color:var(--dim)}
+  .chunk{display:flex; gap:10px; align-items:baseline; padding:9px 0; border-bottom:1px solid var(--line)}
+  .chunk:last-child{border-bottom:0}
+  .chunk .en{font-weight:700; font-size:16px; color:var(--accent2)}
+  .chunk .ja{font-size:13px; color:var(--dim)}
+  .natural{font-size:16.5px; line-height:1.75}
+  .playbtn{
+    background:var(--bg); border:1px solid var(--line); color:var(--fg);
+    border-radius:99px; padding:7px 14px; font-size:13px; font-family:inherit; cursor:pointer; margin-top:10px;
+  }
+  .tx{font-size:14.5px; color:var(--dim); line-height:1.7}
+  .tx .fl{color:var(--dim2); opacity:.55}
+  details summary{cursor:pointer; color:var(--dim); font-size:13px; padding:4px 0}
+
+  /* --- 記録 --- */
+  .chartwrap{overflow-x:auto}
+  label.field{display:block; margin-bottom:14px}
+  label.field .lb{font-size:13px; color:var(--dim); display:block; margin-bottom:6px}
+  input[type=text],input[type=password],select{
+    width:100%; padding:13px; border-radius:10px; border:1px solid var(--line);
+    background:var(--bg); color:var(--fg); font-size:16px; font-family:inherit;
+  }
+  .sw{display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--line)}
+  .sw:last-child{border-bottom:0}
+  .toggle{width:50px; height:30px; border-radius:99px; background:var(--line); border:0; position:relative; cursor:pointer; flex:none}
+  .toggle::after{content:''; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:var(--fg); transition:.15s}
+  .toggle.on{background:var(--accent)}
+  .toggle.on::after{left:23px; background:#06210f}
+  .err{color:var(--bad); font-size:13.5px; margin-top:8px}
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%); bottom:calc(env(safe-area-inset-bottom) + 22px);
+    background:#eef2f8; color:#0e1116; padding:11px 18px; border-radius:99px; font-size:14px; font-weight:700;
+    opacity:0; pointer-events:none; transition:opacity .2s; z-index:9;
+  }
+  .toast.on{opacity:1}
+  .spin{display:inline-block; width:15px; height:15px; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:sp .7s linear infinite; vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ ホーム ═══ -->
+  <section id="home" class="screen on">
+    <div class="hero">
+      <h1 class="logo">KaruTalk</h1>
+      <div class="sub">考える前に、口から出す</div>
+    </div>
+
+    <div class="stats3">
+      <div class="stat"><div class="v" id="hStreak">0</div><div class="k">連続日数</div></div>
+      <div class="stat"><div class="v" id="hTtfw">–</div><div class="k">平均 出だし秒</div></div>
+      <div class="stat"><div class="v" id="hWpm">–</div><div class="k">平均 語/分</div></div>
+    </div>
+
+    <div class="modes">
+      <button class="mode sel" data-mode="quick">
+        <span class="em">⚡</span>
+        <span><span class="t">瞬発ドリル</span><br><span class="d">5問。3秒以内に話し始めて25秒話す</span></span>
+      </button>
+      <button class="mode" data-mode="retell">
+        <span class="em">🔁</span>
+        <span><span class="t">4-3-2 リテリング</span><br><span class="d">同じ話を 60→45→30秒。流暢さの本命</span></span>
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="muted" style="margin-bottom:8px">お題のジャンル</div>
+      <div class="chips" id="catChips">
+        <button class="chip on" data-cat="work">仕事</button>
+        <button class="chip on" data-cat="daily">日常</button>
+        <button class="chip on" data-cat="opinion">意見</button>
+      </div>
+    </div>
+
+    <div class="foot">
+      <button class="primary" id="btnStart">はじめる</button>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost" id="btnStats">記録・マイチャンク</button>
+        <button class="ghost" id="btnSettings">設定</button>
+      </div>
+      <div class="muted2" style="text-align:center; margin-top:10px" id="homeNote"></div>
+    </div>
+  </section>
+
+  <!-- ═══ ドリル ═══ -->
+  <section id="drill" class="screen">
+    <header class="bar">
+      <button class="iconbtn" id="btnQuit">✕ やめる</button>
+      <span class="sp"></span>
+      <span class="muted2" id="drillMode"></span>
+    </header>
+    <div class="progressdots" id="dots"></div>
+
+    <div class="stage">
+      <div>
+        <div class="qlabel" id="qLabel">QUESTION</div>
+        <div class="q" id="qText">—</div>
+        <div class="qja" id="qJa" style="margin-top:8px"></div>
+      </div>
+      <div class="target" id="qTarget"></div>
+
+      <div>
+        <div class="ring">
+          <svg width="168" height="168" viewBox="0 0 168 168">
+            <circle cx="84" cy="84" r="74" fill="none" stroke="#242c38" stroke-width="10"/>
+            <circle id="ringArc" cx="84" cy="84" r="74" fill="none" stroke="#4dd08a" stroke-width="10"
+                    stroke-linecap="round" stroke-dasharray="465" stroke-dashoffset="0"/>
+          </svg>
+          <div class="mid">
+            <div class="big" id="ringNum">—</div>
+            <div class="lbl" id="ringLbl"></div>
+          </div>
+        </div>
+        <div class="meter" style="margin-top:14px"><i id="lvl"></i></div>
+        <div class="status" id="drillStatus" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <button class="primary" id="btnDrill">開始</button>
+    </div>
+  </section>
+
+  <!-- ═══ フィードバック ═══ -->
+  <section id="fb" class="screen">
+    <header class="bar">
+      <h1 id="fbTitle">結果</h1><span class="sp"></span>
+      <span class="muted2" id="fbCount"></span>
+    </header>
+    <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch">
+      <div class="scorerow">
+        <div class="score" id="scTtfw"><div class="v">–</div><div class="k">出だし(秒)</div></div>
+        <div class="score" id="scWords"><div class="v">–</div><div class="k">語数</div></div>
+        <div class="score" id="scWpm"><div class="v">–</div><div class="k">語/分</div></div>
+        <div class="score" id="scFill"><div class="v">–</div><div class="k">えーっと</div></div>
+      </div>
+      <div id="fbBody"></div>
+    </div>
+    <div class="foot">
+      <button class="primary" id="btnNext">次へ</button>
+    </div>
+  </section>
+
+  <!-- ═══ セッション終了 ═══ -->
+  <section id="done" class="screen">
+    <div class="hero" style="padding-top:40px">
+      <div style="font-size:56px">🎉</div>
+      <h1 class="logo" style="font-size:26px" id="doneTitle">おつかれさま</h1>
+      <div class="sub" id="doneSub"></div>
+    </div>
+    <div class="stats3">
+      <div class="stat"><div class="v" id="dTtfw">–</div><div class="k">平均 出だし秒</div></div>
+      <div class="stat"><div class="v" id="dWpm">–</div><div class="k">平均 語/分</div></div>
+      <div class="stat"><div class="v" id="dStreak">–</div><div class="k">連続日数</div></div>
+    </div>
+    <div class="card" id="doneChunks" style="display:none">
+      <div class="sect">今日ひろったチャンク</div>
+      <div id="doneChunkList"></div>
+    </div>
+    <div class="foot">
+      <button class="primary" id="btnHome">ホームへ</button>
+    </div>
+  </section>
+
+  <!-- ═══ 記録 ═══ -->
+  <section id="stats" class="screen">
+    <header class="bar">
+      <button class="iconbtn" data-back>‹ 戻る</button>
+      <h1>記録</h1><span class="sp"></span>
+    </header>
+    <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch">
+      <div class="card">
+        <div class="sect">出だしまでの秒数（下がるほど良い）</div>
+        <div class="chartwrap" id="chartTtfw"></div>
+      </div>
+      <div class="card">
+        <div class="sect">話す速さ 語/分（上がるほど良い）</div>
+        <div class="chartwrap" id="chartWpm"></div>
+      </div>
+      <div class="card">
+        <div class="sect">マイチャンク <span class="muted2" id="chunkCount"></span></div>
+        <div id="chunkList"></div>
+      </div>
+      <div class="card">
+        <div class="sect">データ</div>
+        <div class="row">
+          <button class="ghost" id="btnExport">書き出し</button>
+          <button class="ghost" id="btnReset">全消去</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 設定 ═══ -->
+  <section id="settings" class="screen">
+    <header class="bar">
+      <button class="iconbtn" data-back>‹ 戻る</button>
+      <h1>設定</h1><span class="sp"></span>
+    </header>
+    <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch">
+      <div class="card">
+        <label class="field">
+          <span class="lb">Gemini APIキー（この端末にだけ保存されます）</span>
+          <input type="password" id="inKey" placeholder="AIza..." autocomplete="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <button class="ghost" id="btnTestKey">接続テスト</button>
+        <div id="keyMsg" class="muted" style="margin-top:8px"></div>
+        <div class="muted2" style="margin-top:10px">
+          未設定でもドリルは回せます（出だし秒・語数の計測のみ／添削なし）。
+        </div>
+      </div>
+      <div class="card">
+        <label class="field">
+          <span class="lb">モデル</span>
+          <select id="inModel">
+            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite（速い・推奨）</option>
+            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+            <option value="gemini-3.5-flash">gemini-3.5-flash（丁寧）</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+          </select>
+        </label>
+        <label class="field" style="margin-bottom:0">
+          <span class="lb">1問あたりの持ち時間（瞬発ドリル）</span>
+          <select id="inAnswerSec">
+            <option value="15">15秒</option>
+            <option value="25" selected>25秒</option>
+            <option value="40">40秒</option>
+          </select>
+        </label>
+      </div>
+      <div class="card">
+        <div class="sw"><span>お題を読み上げる</span><button class="toggle on" id="tgSpeak"></button></div>
+        <div class="sw"><span>お手本を自動で読み上げる</span><button class="toggle" id="tgAutoModel"></button></div>
+        <div class="sw"><span>日本語ヒントを最初から表示</span><button class="toggle" id="tgJa"></button></div>
+      </div>
+      <div class="card">
+        <div class="sect">使い方</div>
+        <div class="muted" style="font-size:13.5px">
+          出だしの3秒がすべてです。完璧な文を作ってから話し始めるのをやめて、
+          <b style="color:var(--fg)">Well, / The thing is,</b> で口を動かし始めてください。
+          内容は後からついてきます。<br><br>
+          マイチャンクに溜まった表現は、次のセッションの「今日の狙い」として自動で出題されます。
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="prompts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
