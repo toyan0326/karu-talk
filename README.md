@@ -1,5 +1,7 @@
 # KaruTalk — 画面共有で「どこどこが〜」を言えるようにするドリル
 
+**→ https://toyan0326.github.io/karu-talk/**（iPhoneで開いて、共有 →「ホーム画面に追加」）
+
 言いたいことは決まっているのに、英語がとっさに出てこない。特に**画面共有しながら図面を説明する場面**で、
 指させないぶん全部を言葉で特定しないといけなくて固まる。それだけを直すための個人用アプリ。
 
@@ -102,6 +104,8 @@ patterns.js   組み込みの型30個（位置関係8 + 画面共有の決まり
 3. 会議で言えなかったことは、その場で **🎤 今日これ言えなかった** に放り込む。
 4. iPhoneでは Safari の共有 →「ホーム画面に追加」。
 
+**キーも学習記録も、その端末のブラウザから外に出ません。** リポジトリは公開だが中身はコードだけ。
+
 **マイクを使うには HTTPS が必須**（`localhost` は例外）。`http://192.168.x.x` では Safari が
 `navigator.mediaDevices` すら渡さないので、ホーム画面でその旨を出して開始ボタンを止めている。
 
@@ -113,21 +117,31 @@ patterns.js   組み込みの型30個（位置関係8 + 画面共有の決まり
 cd ~/dev/karu-talk && python3 -m http.server 8772
 ```
 
-### NASに置く
+### 更新のしかた
 
 ```bash
-cd ~/dev/karu-talk && cp index.html app.js figures.js patterns.js manifest.json icon-*.png /Volumes/web/karu-talk/
+cd ~/dev/karu-talk && git push          # GitHub Pages が数十秒で反映する
 ```
 
 **`index.html` の `?v=N` を必ず上げること。** Safariは強くキャッシュするので、上げないと古いコードのまま動く。
 ただし `index.html` 自体にはバージョンが無いので、indexがキャッシュされていると `?v=N` の更新自体が届かない。
-反映されないときはSafariで開き直す。確実にやるなら Web Station 側で `index.html` に `Cache-Control: no-cache` を付ける。
+反映されないときはSafariで開き直す（ホーム画面のアイコンから開いた場合は特に）。
+
+### NASにも置く場合（任意）
+
+家のLAN内の控え。ただし `http://192.168.1.22/karu-talk/` は**HTTPSでないのでマイクが使えない**。
+
+```bash
+cp index.html app.js figures.js patterns.js manifest.json icon-*.png /Volumes/web/karu-talk/
+```
+
+NAS配信でマイクまで使うには、ルーターでの 80/443 転送＋Synology DDNS＋Let's Encrypt が要る。
+**GW040-NS(VNPT) はログイン不明・UPnPも無効**だったため、この道は断念して GitHub Pages にした。
 
 ## まだやっていないこと
 
 - **アバター**（架空の人物が出題者として話しかけてくる）。出題文はほぼ固定なので、音声と口パクを
   事前生成すればドリル中の遅延はゼロにできる。ドリル本体が回り始めてから。
-- HTTPSでのiPhone配信（Synology DDNS + Let's Encrypt）。
 - macOS Safari での実機確認。ScriptProcessorNode・`audioBitsPerSecond`・
   `await speak()` を挟んだ AudioContext のジェスチャ制限は、まだChromiumでしか確かめていない。
   Safariは iOS と同じWebKitなので、`KaruTalkを起動.command` から一度回せば大半のリスクが消える。
