@@ -19,7 +19,7 @@ const DEFAULTS = {
     apiKey: '', model: 'gemini-3.5-flash-lite', answerSec: 25,
     speakQuestion: true, showJa: false, figKinds: ['plan', 'section', 'chart'],
     newPerDay: 4,
-    listening: false, listenRate: 1,
+    listening: false, listenRate: 1, avatar: true,
   },
   patterns: [],   // 型。これが学習の単位
   inbox: [],      // 「言えなかった」受信箱
@@ -118,6 +118,21 @@ let backTo = 'home';
 function show(id) {
   $$('.screen').forEach(s => s.classList.toggle('on', s.id === id));
   window.scrollTo(0, 0);
+  placeAvatar(id);
+}
+
+// アバターは1体しかいないので、今いる画面へ付け替える。
+// 見えていない間はアニメーションを止める（rAFを回しっぱなしにしない）。
+function placeAvatar(screenId) {
+  if (typeof Avatar === 'undefined') return;
+  if (!S.settings.avatar) return Avatar.unmount();
+  if (screenId === 'home') return Avatar.mountIn($('avHome'));
+  if (screenId === 'drill') {
+    const it = sess && sess.items[sess.idx];
+    return Avatar.mountIn(it && it.listen ? $('avDrill') : null);
+  }
+  if (screenId === 'fb') return Avatar.mountIn($('avFb'));
+  Avatar.unmount();
 }
 let toastT;
 function toast(msg) {
@@ -161,13 +176,16 @@ function speak(text, rate = 0.95) {
       u.lang = 'en-US'; u.rate = rate;
       if (!enVoice) enVoice = pickVoice();
       if (enVoice) u.voice = enVoice;
+      let started = false, retried = false;
+      u.onstart = () => { started = true; };
       u.onend = fin; u.onerror = fin;
-      // Safari は稀にキューごと固まる。少し待って発話が始まっていなければ叩き直す。
+      // Safari は稀にキューごと固まる。「一度も始まっていない」ときだけ、1回だけ叩き直す。
+      // synth.speaking を見て判断すると、発話の切れ目で誤爆して二重に喋る（実際にそうなった）。
       setTimeout(() => {
-        if (!done && !synth.speaking && !synth.pending) {
-          try { synth.resume(); synth.speak(new SpeechSynthesisUtterance(text)); } catch {}
-        }
-      }, 260);
+        if (done || started || retried) return;
+        retried = true;
+        try { synth.resume(); synth.speak(u); } catch {}
+      }, 300);
       // onend が来ない端末があるので、長さから見積もった時間で強制解決
       setTimeout(fin, Math.min(20000, 1400 + text.length * 80));
       try { synth.resume(); } catch {}   // 一時停止状態で固まっているのを解く
@@ -748,6 +766,7 @@ function renderListen(it) {
   $('btnDrill').textContent = '次へ';
   $('btnDrill').disabled = true;      // 答えるまで進めない
   phase = 'listen-answer';
+  placeAvatar('drill');
   // 自動再生はブラウザに拒否されることがあるので、必ず押せる再生ボタンを置いておく
   setTimeout(() => playListen(), 350);
 }
@@ -757,8 +776,12 @@ function playListen() {
   const b = $('btnPlay');
   b.classList.add('playing');
   b.textContent = '🔊 再生中…';
-  speak(sess.items[sess.idx].listen.spoken, Number(S.settings.listenRate) || 1)
-    .then(() => { b.classList.remove('playing'); b.textContent = '🔊 もう一度'; });
+  const txt = sess.items[sess.idx].listen.spoken;
+  const rate = Number(S.settings.listenRate) || 1;
+  const done = () => { b.classList.remove('playing'); b.textContent = '🔊 もう一度'; };
+  if (S.settings.avatar && typeof Avatar !== 'undefined' && Avatar.host) {
+    Avatar.say(txt, rate, speak).then(done);
+  } else speak(txt, rate).then(done);
 }
 
 function answerListen(idx) {
@@ -1030,6 +1053,7 @@ function renderSettings() {
   $('inNewPerDay').value = String(S.settings.newPerDay);
   $('inListenRate').value = String(S.settings.listenRate);
   $('tgListen').classList.toggle('on', !!S.settings.listening);
+  $('tgAvatar').classList.toggle('on', !!S.settings.avatar);
   $('tgSpeak').classList.toggle('on', !!S.settings.speakQuestion);
   $('tgJa').classList.toggle('on', !!S.settings.showJa);
   $$('#figChips .chip').forEach(c => c.classList.toggle('on', S.settings.figKinds.includes(c.dataset.fig)));
@@ -1073,7 +1097,9 @@ $('btnNext').addEventListener('click', () => {
 });
 $('fbBody').addEventListener('click', e => {
   const say = e.target.closest('[data-say]');
-  if (say) speak(say.dataset.say, 0.92);
+  if (!say) return;
+  if (S.settings.avatar && typeof Avatar !== 'undefined' && Avatar.host) Avatar.say(say.dataset.say, 0.92, speak);
+  else speak(say.dataset.say, 0.92);
 });
 $('btnHome').addEventListener('click', () => show('home'));
 
@@ -1110,6 +1136,11 @@ $('tgListen').addEventListener('click', () => {
   $('tgListen').classList.toggle('on', S.settings.listening); save();
 });
 $('inListenRate').addEventListener('change', e => { S.settings.listenRate = Number(e.target.value); save(); });
+$('tgAvatar').addEventListener('click', () => {
+  S.settings.avatar = !S.settings.avatar;
+  $('tgAvatar').classList.toggle('on', S.settings.avatar);
+  save(); placeAvatar('settings');
+});
 $('tgSpeak').addEventListener('click', () => {
   S.settings.speakQuestion = !S.settings.speakQuestion;
   $('tgSpeak').classList.toggle('on', S.settings.speakQuestion); save();
@@ -1157,3 +1188,4 @@ $('btnReset').addEventListener('click', () => {
 /* ════════ 起動 ════════ */
 save();
 refreshHome();
+placeAvatar('home');

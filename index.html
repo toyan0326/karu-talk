@@ -79,7 +79,11 @@
   .meter i{display:block; height:100%; width:0%; background:var(--accent); transition:width .06s linear}
   .status{font-size:14px; color:var(--dim); min-height:22px; margin-top:8px}
   .status.hot{color:var(--accent)} .status.late{color:var(--warn)}
-  .playbig{display:block; margin:0 auto 14px; padding:13px 26px; border-radius:99px;
+  .avhome{width:118px; height:132px; margin:0 auto 2px}
+  .avsmall{width:78px; height:88px; flex:none}
+  .avrow{display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:14px}
+  .avfb{width:64px; height:72px; flex:none}
+  .playbig{display:block; margin:0; padding:13px 26px; border-radius:99px;
     border:1px solid var(--accent2); background:#10202f; color:var(--accent2);
     font-size:16px; font-weight:700; font-family:inherit; cursor:pointer}
   .playbig:active{background:#16304a}
@@ -157,6 +161,7 @@
   <!-- ═══ ホーム ═══ -->
   <section id="home" class="screen on">
     <div class="hero">
+      <div class="avhome" id="avHome"></div>
       <h1 class="logo">KaruTalk</h1>
       <div class="sub">画面共有で「どこどこが〜」を言えるようにする</div>
     </div>
@@ -206,7 +211,8 @@
         <div class="status" id="drillStatus"></div>
       </div>
       <div id="listenArea" style="display:none">
-        <button id="btnPlay" class="playbig">🔊 聞く</button>
+        <div class="avrow"><div class="avsmall" id="avDrill"></div>
+          <button id="btnPlay" class="playbig">🔊 聞く</button></div>
         <div class="choices" id="choices"></div>
         <div class="listenResult" id="listenResult"></div>
       </div>
@@ -216,7 +222,8 @@
 
   <!-- ═══ 結果 ═══ -->
   <section id="fb" class="screen">
-    <header class="bar"><h1 id="fbTitle">結果</h1><span class="sp"></span>
+    <header class="bar"><div class="avfb" id="avFb"></div>
+      <h1 id="fbTitle">結果</h1><span class="sp"></span>
       <span class="muted2" id="fbCount"></span></header>
     <div class="scroll">
       <div class="scorerow">
@@ -339,6 +346,7 @@
         </label>
       </div>
       <div class="card">
+        <div class="sw"><span>出題者の顔を出す</span><button class="toggle on" id="tgAvatar"></button></div>
         <div class="sw"><span>リスニングを混ぜる</span><button class="toggle" id="tgListen"></button></div>
         <div class="muted2" style="margin:-4px 0 10px">
           相手が言った場所を聞き取って、図の上でタップして当てる問題が1セッションに2〜3問入ります。
@@ -380,8 +388,9 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="patterns.js?v=8"></script>
-<script src="figures.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="avatar.js?v=9"></script>
+<script src="patterns.js?v=9"></script>
+<script src="figures.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
