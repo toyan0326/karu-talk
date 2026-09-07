@@ -79,6 +79,16 @@
   .meter i{display:block; height:100%; width:0%; background:var(--accent); transition:width .06s linear}
   .status{font-size:14px; color:var(--dim); min-height:22px; margin-top:8px}
   .status.hot{color:var(--accent)} .status.late{color:var(--warn)}
+  .choices{display:flex; gap:9px; justify-content:center}
+  .choices button{flex:1; max-width:74px; aspect-ratio:1; border-radius:16px; border:1px solid var(--line);
+    background:var(--bg2); color:var(--fg); font-size:26px; font-weight:800; font-family:inherit; cursor:pointer}
+  .choices button:active{background:#1d2735}
+  .choices button.right{background:var(--accent); border-color:var(--accent); color:#06210f}
+  .choices button.wrong{background:#3a1d1b; border-color:var(--bad); color:var(--bad)}
+  .choices button[disabled]{opacity:.55}
+  .listenResult{margin-top:14px; min-height:44px; font-size:14.5px; line-height:1.6}
+  .listenResult .heard{color:var(--fg); font-size:16px; font-weight:600}
+  .listenResult .why{color:var(--dim); font-size:13px; margin-top:4px}
 
   /* 結果 */
   .scorerow{display:flex; gap:7px; margin-bottom:12px}
@@ -178,7 +188,7 @@
         <div class="q" id="qText">—</div>
         <div class="qja" id="qJa"></div>
       </div>
-      <div>
+      <div id="speakArea">
         <div class="ring">
           <svg width="132" height="132" viewBox="0 0 168 168">
             <circle cx="84" cy="84" r="74" fill="none" stroke="#242c38" stroke-width="10"/>
@@ -189,6 +199,10 @@
         </div>
         <div class="meter"><i id="lvl"></i></div>
         <div class="status" id="drillStatus"></div>
+      </div>
+      <div id="listenArea" style="display:none">
+        <div class="choices" id="choices"></div>
+        <div class="listenResult" id="listenResult"></div>
       </div>
     </div>
     <div class="foot"><button class="primary" id="btnDrill">開始</button></div>
@@ -218,6 +232,7 @@
     </div>
     <div class="stats3">
       <div class="stat"><div class="v" id="dOk">–</div><div class="k">通じた</div></div>
+      <div class="stat" id="dListenWrap" style="display:none"><div class="v" id="dListen">–</div><div class="k">聞き取れた</div></div>
       <div class="stat"><div class="v" id="dTtfw">–</div><div class="k">平均 出だし秒</div></div>
       <div class="stat"><div class="v" id="dLeft">–</div><div class="k">あと1回で卒業</div></div>
     </div>
@@ -318,6 +333,21 @@
         </label>
       </div>
       <div class="card">
+        <div class="sw"><span>リスニングを混ぜる</span><button class="toggle" id="tgListen"></button></div>
+        <div class="muted2" style="margin:-4px 0 10px">
+          相手が言った場所を聞き取って、図の上でタップして当てる問題が1セッションに2〜3問入ります。
+        </div>
+        <label class="field" style="margin-bottom:0">
+          <span class="lb">読み上げの速さ</span>
+          <select id="inListenRate">
+            <option value="0.85">ゆっくり (0.85x)</option>
+            <option value="1">ふつう (1.0x)</option>
+            <option value="1.15">速い (1.15x)</option>
+            <option value="1.3">かなり速い (1.3x) — 会議はこれくらい</option>
+          </select>
+        </label>
+      </div>
+      <div class="card">
         <div class="sw"><span>質問を読み上げる</span><button class="toggle on" id="tgSpeak"></button></div>
         <div class="sw"><span>型の日本語を最初から出す</span><button class="toggle" id="tgJa"></button></div>
       </div>
@@ -344,8 +374,8 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="patterns.js?v=5"></script>
-<script src="figures.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="patterns.js?v=7"></script>
+<script src="figures.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

@@ -19,6 +19,7 @@ const DEFAULTS = {
     apiKey: '', model: 'gemini-3.5-flash-lite', answerSec: 25,
     speakQuestion: true, showJa: false, figKinds: ['plan', 'section', 'chart'],
     newPerDay: 4,
+    listening: false, listenRate: 1,
   },
   patterns: [],   // 型。これが学習の単位
   inbox: [],      // 「言えなかった」受信箱
@@ -471,6 +472,12 @@ function dueList() {
   return reviews.concat(graduated, fresh);
 }
 
+function scoreListen(p, ok) {
+  p.listenSeen = (p.listenSeen || 0) + 1;
+  if (ok) p.listenStreak = (p.listenStreak || 0) + 1;
+  else p.listenStreak = 0;
+}
+
 function scorePattern(p, ok) {
   p.seen = (p.seen || 0) + 1;
   if (!p.introducedAt) p.introducedAt = Date.now();
@@ -531,7 +538,19 @@ function buildSession(n = 8, ahead = false) {
     list = list.concat(more);
   }
   if (!list.length) return false;
-  sess = { items: list.slice(0, n).map(makeItem), idx: 0, results: [], startedAt: Date.now() };
+  const items = list.slice(0, n).map(makeItem);
+
+  // リスニングは頭に2〜3問。話す方の型を、耳の側から当てさせる。
+  // 図を持つ型（位置関係を持つ型）だけが対象。
+  if (S.settings.listening) {
+    const cands = list.filter(p => p.relation && RELATIONS.includes(p.relation));
+    const nL = Math.min(3, cands.length, Math.max(2, Math.round(items.length / 3)));
+    const heads = cands.slice(0, nL).map(p => ({
+      pattern: p, listen: genListening(p.relation, S.settings.figKinds),
+    }));
+    items.unshift(...heads);
+  }
+  sess = { items, idx: 0, results: [], startedAt: Date.now() };
   return true;
 }
 
@@ -550,6 +569,7 @@ function setRing(frac, color) {
 
 async function renderItem() {
   const it = sess.items[sess.idx];
+  if (it.listen) return renderListen(it);
   $('dots').innerHTML = sess.items
     .map((_, i) => `<span class="dot ${i < sess.idx ? 'done' : i === sess.idx ? 'now' : ''}"></span>`).join('');
   $('qLabel').textContent = `${sess.idx + 1} / ${sess.items.length}`;
@@ -576,6 +596,7 @@ async function renderItem() {
     $('qJa').textContent = 'これを英語で';
   }
 
+  $('speakArea').style.display = ''; $('listenArea').style.display = 'none';
   $('ringNum').textContent = '▶'; $('ringLbl').textContent = '';
   $('lvl').style.width = '0%';
   setRing(1, '#242c38');
@@ -681,6 +702,56 @@ async function finishItem(silent) {
   }
 }
 
+
+/* ════════ 聞き取り問題 ════════
+ * 話すドリルのちょうど裏返し。図の正解はこちらが持っているので、
+ * タップした瞬間に判定が決まる（APIも通信も要らない＝速い・無料・オフラインでも動く）。 */
+function renderListen(it) {
+  const L = it.listen;
+  $('dots').innerHTML = sess.items
+    .map((_, i) => `<span class="dot ${i < sess.idx ? 'done' : i === sess.idx ? 'now' : ''}"></span>`).join('');
+  $('qLabel').textContent = `${sess.idx + 1} / ${sess.items.length}`;
+  $('qPattern').textContent = '👂 聞き取り';
+  $('figWrap').innerHTML = L.svg;
+  $('figWrap').style.display = '';
+  $('qText').textContent = 'どこの話をしている？';
+  $('qJa').textContent = '聞こえた場所の番号をタップ';
+
+  $('speakArea').style.display = 'none';
+  $('listenArea').style.display = '';
+  $('listenResult').innerHTML = '';
+  $('choices').innerHTML = Array.from({ length: L.choices },
+    (_, i) => `<button data-choice="${i}">${i + 1}</button>`).join('');
+  $('btnDrill').textContent = '🔊 もう一度';
+  $('btnDrill').disabled = false;
+  phase = 'listen-answer';
+  setTimeout(() => speak(L.spoken, Number(S.settings.listenRate) || 1), 350);
+}
+
+function answerListen(idx) {
+  if (phase !== 'listen-answer') return;
+  const it = sess.items[sess.idx];
+  const L = it.listen;
+  const ok = idx === L.answer;
+  phase = 'listen-done';
+
+  $$('#choices button').forEach((b, i) => {
+    b.disabled = true;
+    if (i === L.answer) b.classList.add('right');
+    else if (i === idx) b.classList.add('wrong');
+  });
+  scoreListen(it.pattern, ok);
+  S.history.push({ at: Date.now(), patternId: it.pattern.id, mode: 'listen', ok });
+  save();
+  sess.results.push({ type: 'listen', ok });
+
+  $('listenResult').innerHTML =
+    `<span class="badge ${ok ? '' : 'warn'}">${ok ? '正解' : `正解は ${L.answer + 1}`}</span>
+     <div class="heard" style="margin-top:8px">${esc(L.spoken)}</div>
+     <div class="why">${ok ? '聞き取れています' : 'もう一度聞いてから次へ'}</div>`;
+  $('btnDrill').textContent = (sess.idx >= sess.items.length - 1) ? '終える' : '次へ';
+}
+
 /* ════════ フィードバック ════════ */
 function showFeedback(fb, note) {
   const it = sess.items[sess.idx];
@@ -752,7 +823,9 @@ function showFeedback(fb, note) {
 }
 
 function endSession() {
-  const rs = sess.results;
+  const all = sess.results;
+  const rs = all.filter(r => r.type !== 'listen');
+  const ls = all.filter(r => r.type === 'listen');
   const okN = rs.filter(r => r.ok).length;
   const tt = rs.filter(r => r.ttfw != null).map(r => r.ttfw);
   S.sessions.push({
@@ -761,6 +834,8 @@ function endSession() {
   });
   save();
   $('dOk').textContent = `${okN}/${rs.length}`;
+  $('dListen').textContent = ls.length ? `${ls.filter(r => r.ok).length}/${ls.length}` : '–';
+  $('dListenWrap').style.display = ls.length ? '' : 'none';
   $('dTtfw').textContent = tt.length ? (tt.reduce((a, b) => a + b, 0) / tt.length).toFixed(1) : '–';
   // 「あと1回で卒業」は、明日また開く理由になる数字
   $('dLeft').textContent = S.patterns.filter(p => (p.streak || 0) === 2).length;
@@ -919,6 +994,8 @@ function renderSettings() {
   $('inModel').value = S.settings.model;
   $('inAnswerSec').value = String(S.settings.answerSec);
   $('inNewPerDay').value = String(S.settings.newPerDay);
+  $('inListenRate').value = String(S.settings.listenRate);
+  $('tgListen').classList.toggle('on', !!S.settings.listening);
   $('tgSpeak').classList.toggle('on', !!S.settings.speakQuestion);
   $('tgJa').classList.toggle('on', !!S.settings.showJa);
   $$('#figChips .chip').forEach(c => c.classList.toggle('on', S.settings.figKinds.includes(c.dataset.fig)));
@@ -934,9 +1011,22 @@ $('btnStart').addEventListener('click', () => {
   renderItem().then(() => show('drill'));
 });
 $('btnDrill').addEventListener('click', () => {
+  if (phase === 'listen-answer') {          // 聞き直す
+    const L = sess.items[sess.idx].listen;
+    return void speak(L.spoken, Number(S.settings.listenRate) || 1);
+  }
+  if (phase === 'listen-done') {            // 次へ進む
+    speechSynthesis.cancel();
+    if (sess.idx >= sess.items.length - 1) return endSession();
+    sess.idx++; return void renderItem().then(() => show('drill'));
+  }
   Mic.ensureCtx();
   if (phase === 'ready') beginItem();
   else if (phase === 'wait' || phase === 'answer') finishItem(phase === 'wait');
+});
+$('choices').addEventListener('click', e => {
+  const b = e.target.closest('[data-choice]');
+  if (b) answerListen(Number(b.dataset.choice));
 });
 $('btnQuit').addEventListener('click', async () => {
   clearInterval(clockT);
@@ -983,6 +1073,11 @@ $('inKey').addEventListener('change', e => { S.settings.apiKey = e.target.value.
 $('inModel').addEventListener('change', e => { S.settings.model = e.target.value; save(); });
 $('inAnswerSec').addEventListener('change', e => { S.settings.answerSec = Number(e.target.value); save(); });
 $('inNewPerDay').addEventListener('change', e => { S.settings.newPerDay = Number(e.target.value); save(); refreshHome(); });
+$('tgListen').addEventListener('click', () => {
+  S.settings.listening = !S.settings.listening;
+  $('tgListen').classList.toggle('on', S.settings.listening); save();
+});
+$('inListenRate').addEventListener('change', e => { S.settings.listenRate = Number(e.target.value); save(); });
 $('tgSpeak').addEventListener('click', () => {
   S.settings.speakQuestion = !S.settings.speakQuestion;
   $('tgSpeak').classList.toggle('on', S.settings.speakQuestion); save();
