@@ -517,7 +517,8 @@ async function renderItem() {
   $('dots').innerHTML = sess.items
     .map((_, i) => `<span class="dot ${i < sess.idx ? 'done' : i === sess.idx ? 'now' : ''}"></span>`).join('');
   $('qLabel').textContent = `${sess.idx + 1} / ${sess.items.length}`;
-  $('qPattern').textContent = '🎯 ' + (it.pattern.en || '');
+  // 型のヒントは図の問題だけ。意図カードでは p.en が答えそのものなので出さない。
+  $('qPattern').textContent = it.fig ? '🎯 ' + (it.pattern.en || '') : '';
 
   const stage = $('figWrap');
   if (it.fig) {
