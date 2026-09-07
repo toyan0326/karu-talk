@@ -151,18 +151,33 @@ function warmTTS() {
 }
 function speak(text, rate = 0.95) {
   return new Promise(resolve => {
-    if (!('speechSynthesis' in window)) return resolve();
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = rate;
-    if (!enVoice) enVoice = pickVoice();
-    if (enVoice) u.voice = enVoice;
+    if (!('speechSynthesis' in window) || !text) return resolve();
+    const synth = window.speechSynthesis;
     let done = false;
     const fin = () => { if (!done) { done = true; resolve(); } };
-    u.onend = fin; u.onerror = fin;
-    // onendが来ない端末があるので、文字数から見積もった時間で強制解決
-    setTimeout(fin, Math.min(20000, 1200 + text.length * 75));
-    speechSynthesis.speak(u);
+
+    const go = () => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US'; u.rate = rate;
+      if (!enVoice) enVoice = pickVoice();
+      if (enVoice) u.voice = enVoice;
+      u.onend = fin; u.onerror = fin;
+      // Safari は稀にキューごと固まる。少し待って発話が始まっていなければ叩き直す。
+      setTimeout(() => {
+        if (!done && !synth.speaking && !synth.pending) {
+          try { synth.resume(); synth.speak(new SpeechSynthesisUtterance(text)); } catch {}
+        }
+      }, 260);
+      // onend が来ない端末があるので、長さから見積もった時間で強制解決
+      setTimeout(fin, Math.min(20000, 1400 + text.length * 80));
+      try { synth.resume(); } catch {}   // 一時停止状態で固まっているのを解く
+      synth.speak(u);
+    };
+
+    // ★ Safari は cancel() と同じティックで speak() すると新しい発話を握り潰す。
+    //   止める必要があるときだけ止めて、必ず次のティックで話す。
+    if (synth.speaking || synth.pending) { synth.cancel(); setTimeout(go, 90); }
+    else go();
   });
 }
 
@@ -543,7 +558,14 @@ function buildSession(n = 8, ahead = false) {
   // リスニングは頭に2〜3問。話す方の型を、耳の側から当てさせる。
   // 図を持つ型（位置関係を持つ型）だけが対象。
   if (S.settings.listening) {
-    const cands = list.filter(p => p.relation && RELATIONS.includes(p.relation));
+    // 今日の型だけから選ぶと、位置関係を持つ型(30個中8個)が当たらない日はリスニングが
+    // 一度も出ない。足りなければ期限前の型からも借りて、必ず出るようにする。
+    const hasRel = (p) => p.relation && RELATIONS.includes(p.relation);
+    let cands = list.filter(hasRel);
+    if (cands.length < 2) {
+      cands = cands.concat(livePatterns().filter(p => hasRel(p) && !cands.includes(p))
+        .sort((a, b) => (a.listenSeen || 0) - (b.listenSeen || 0)));
+    }
     const nL = Math.min(3, cands.length, Math.max(2, Math.round(items.length / 3)));
     const heads = cands.slice(0, nL).map(p => ({
       pattern: p, listen: genListening(p.relation, S.settings.figKinds),
@@ -722,10 +744,21 @@ function renderListen(it) {
   $('listenResult').innerHTML = '';
   $('choices').innerHTML = Array.from({ length: L.choices },
     (_, i) => `<button data-choice="${i}">${i + 1}</button>`).join('');
-  $('btnDrill').textContent = '🔊 もう一度';
-  $('btnDrill').disabled = false;
+  $('btnPlay').textContent = '🔊 聞く';
+  $('btnDrill').textContent = '次へ';
+  $('btnDrill').disabled = true;      // 答えるまで進めない
   phase = 'listen-answer';
-  setTimeout(() => speak(L.spoken, Number(S.settings.listenRate) || 1), 350);
+  // 自動再生はブラウザに拒否されることがあるので、必ず押せる再生ボタンを置いておく
+  setTimeout(() => playListen(), 350);
+}
+
+function playListen() {
+  if (!sess || !sess.items[sess.idx] || !sess.items[sess.idx].listen) return;
+  const b = $('btnPlay');
+  b.classList.add('playing');
+  b.textContent = '🔊 再生中…';
+  speak(sess.items[sess.idx].listen.spoken, Number(S.settings.listenRate) || 1)
+    .then(() => { b.classList.remove('playing'); b.textContent = '🔊 もう一度'; });
 }
 
 function answerListen(idx) {
@@ -750,6 +783,7 @@ function answerListen(idx) {
      <div class="heard" style="margin-top:8px">${esc(L.spoken)}</div>
      <div class="why">${ok ? '聞き取れています' : 'もう一度聞いてから次へ'}</div>`;
   $('btnDrill').textContent = (sess.idx >= sess.items.length - 1) ? '終える' : '次へ';
+  $('btnDrill').disabled = false;
 }
 
 /* ════════ フィードバック ════════ */
@@ -1011,10 +1045,7 @@ $('btnStart').addEventListener('click', () => {
   renderItem().then(() => show('drill'));
 });
 $('btnDrill').addEventListener('click', () => {
-  if (phase === 'listen-answer') {          // 聞き直す
-    const L = sess.items[sess.idx].listen;
-    return void speak(L.spoken, Number(S.settings.listenRate) || 1);
-  }
+  if (phase === 'listen-answer') return;    // 答えるまで進めない
   if (phase === 'listen-done') {            // 次へ進む
     speechSynthesis.cancel();
     if (sess.idx >= sess.items.length - 1) return endSession();
@@ -1024,6 +1055,7 @@ $('btnDrill').addEventListener('click', () => {
   if (phase === 'ready') beginItem();
   else if (phase === 'wait' || phase === 'answer') finishItem(phase === 'wait');
 });
+$('btnPlay').addEventListener('click', playListen);
 $('choices').addEventListener('click', e => {
   const b = e.target.closest('[data-choice]');
   if (b) answerListen(Number(b.dataset.choice));

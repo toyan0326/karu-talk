@@ -79,6 +79,11 @@
   .meter i{display:block; height:100%; width:0%; background:var(--accent); transition:width .06s linear}
   .status{font-size:14px; color:var(--dim); min-height:22px; margin-top:8px}
   .status.hot{color:var(--accent)} .status.late{color:var(--warn)}
+  .playbig{display:block; margin:0 auto 14px; padding:13px 26px; border-radius:99px;
+    border:1px solid var(--accent2); background:#10202f; color:var(--accent2);
+    font-size:16px; font-weight:700; font-family:inherit; cursor:pointer}
+  .playbig:active{background:#16304a}
+  .playbig.playing{background:var(--accent2); color:#06210f}
   .choices{display:flex; gap:9px; justify-content:center}
   .choices button{flex:1; max-width:74px; aspect-ratio:1; border-radius:16px; border:1px solid var(--line);
     background:var(--bg2); color:var(--fg); font-size:26px; font-weight:800; font-family:inherit; cursor:pointer}
@@ -201,6 +206,7 @@
         <div class="status" id="drillStatus"></div>
       </div>
       <div id="listenArea" style="display:none">
+        <button id="btnPlay" class="playbig">🔊 聞く</button>
         <div class="choices" id="choices"></div>
         <div class="listenResult" id="listenResult"></div>
       </div>
@@ -374,8 +380,8 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="patterns.js?v=7"></script>
-<script src="figures.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="patterns.js?v=8"></script>
+<script src="figures.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
