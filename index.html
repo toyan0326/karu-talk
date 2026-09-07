@@ -146,8 +146,8 @@
       <div class="sub">画面共有で「どこどこが〜」を言えるようにする</div>
     </div>
     <div class="stats3">
-      <div class="stat"><div class="v" id="hLeft">0</div><div class="k">未習得の型</div></div>
       <div class="stat"><div class="v" id="hDue">0</div><div class="k">今日やる型</div></div>
+      <div class="stat"><div class="v" id="hGrad">0</div><div class="k">卒業した型</div></div>
       <div class="stat"><div class="v" id="hStreak">0</div><div class="k">連続日数</div></div>
     </div>
 
@@ -219,7 +219,7 @@
     <div class="stats3">
       <div class="stat"><div class="v" id="dOk">–</div><div class="k">通じた</div></div>
       <div class="stat"><div class="v" id="dTtfw">–</div><div class="k">平均 出だし秒</div></div>
-      <div class="stat"><div class="v" id="dLeft">–</div><div class="k">未習得の型</div></div>
+      <div class="stat"><div class="v" id="dLeft">–</div><div class="k">あと1回で卒業</div></div>
     </div>
     <div class="card" id="doneGrad" style="display:none">
       <div class="sect">🎓 卒業した型</div><div id="doneGradList"></div>
@@ -302,6 +302,14 @@
             <option value="gemini-2.5-flash">gemini-2.5-flash</option>
           </select>
         </label>
+        <label class="field">
+          <span class="lb">1日に下ろす新しい型の数</span>
+          <select id="inNewPerDay">
+            <option value="2">2個（ゆっくり）</option>
+            <option value="4">4個（推奨）</option>
+            <option value="8">8個（急ぐ）</option>
+          </select>
+        </label>
         <label class="field" style="margin-bottom:0">
           <span class="lb">1問あたりの持ち時間</span>
           <select id="inAnswerSec">
@@ -316,8 +324,9 @@
       <div class="card">
         <div class="sect">使い方</div>
         <div class="muted" style="font-size:13.5px">
-          学習の単位は<b style="color:var(--fg)">型</b>です。同じ型で3回言えたら卒業して消えます。
-          「未習得の型」が減っていくのが、続けるための唯一の目印です。<br><br>
+          学習の単位は<b style="color:var(--fg)">型</b>です。<b style="color:var(--fg)">3日連続で言えたら卒業</b>。
+          新しい型は1日数個ずつしか出てこないので、初日に山を積まれることはありません。
+          卒業した型も2週間後・1ヶ月半後に一度だけ戻ってきます。<br><br>
           会議で言えなかったことは、その場で <b style="color:var(--fg)">🎤 今日これ言えなかった</b> に放り込んでください。
           受信箱で「型にする」を押すと、同じ型の別の問題が3問ついてきて、翌日から出題に回ります。
         </div>
@@ -335,8 +344,8 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="patterns.js?v=4"></script>
-<script src="figures.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="patterns.js?v=5"></script>
+<script src="figures.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

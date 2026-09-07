@@ -18,6 +18,7 @@ const DEFAULTS = {
   settings: {
     apiKey: '', model: 'gemini-3.5-flash-lite', answerSec: 25,
     speakQuestion: true, showJa: false, figKinds: ['plan', 'section', 'chart'],
+    newPerDay: 4,
   },
   patterns: [],   // 型。これが学習の単位
   inbox: [],      // 「言えなかった」受信箱
@@ -126,7 +127,7 @@ function toast(msg) {
 }
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD(ローカル)
+const today = () => new Date(Date.now()).toLocaleDateString('sv-SE'); // YYYY-MM-DD(ローカル)
 
 /* ════════ 読み上げ ════════ */
 let enVoice = null;
@@ -392,7 +393,7 @@ const CAPTURE_SCHEMA = {
     noteJa: { type: 'string' },
     relation: { type: 'string' },
     variants: {
-      type: 'array', items: {
+      type: 'array', minItems: 3, maxItems: 3, items: {
         type: 'object', properties: { ja: { type: 'string' }, en: { type: 'string' } },
         required: ['ja', 'en'],
       },
@@ -433,27 +434,58 @@ async function captureToPattern(inboxItem) {
   return callGemini(parts, CAPTURE_SYS, CAPTURE_SCHEMA, 0.5);
 }
 
-/* ════════ 間隔反復（型ごと） ════════ */
-const BOX_DAYS = [0, 1, 3, 7, 21];
+/* ════════ 間隔反復（型ごと） ════════
+ * 14日ぶんを早送りして検証したところ、初期実装は
+ *   ・最初の3日間「未習得30」のまま数字が1ミリも動かない
+ *   ・6日目にデッキが空になり、やることが無くなる
+ * という最悪の形だった。続くかどうかはこの数字が動くかで決まるので作り直した。
+ *   - 新しい型は1日 newPerDay 個ずつしか下ろさない（30個を初日に浴びせない）
+ *   - 卒業までの間隔は1日刻み。3日連続で言えたら卒業＝3日目に必ず数字が動く
+ *   - 卒業した型も忘れた頃に戻ってくる。空にはならない
+ */
 const DAY = 86400e3;
-const livePatterns = () => S.patterns.filter(p => (p.streak || 0) < 3);
-const duePatterns = () => livePatterns().filter(p => (p.due || 0) <= Date.now())
-  // due が同点だと配列順のまま出て、初回が図の型ばかりになる。同点はばらす。
-  .map(p => ({ p, r: Math.random() }))
-  .sort((a, b) => ((a.p.due || 0) - (b.p.due || 0)) || (a.r - b.r))
-  .map(x => x.p);
+const REVIEW_1 = 10 * DAY;   // 卒業直後の復習。14日にすると2週目に3日ほど何もない日ができた
+const REVIEW_2 = 40 * DAY;   // その次
+
+const isGraduated = (p) => (p.streak || 0) >= 3;
+const isIntroduced = (p) => !!p.introducedAt;
+const livePatterns = () => S.patterns.filter(p => !isGraduated(p));
+
+// 今日すでに下ろした新しい型の数
+function newToday() {
+  const t = today();
+  return S.patterns.filter(p => p.introducedAt &&
+    new Date(p.introducedAt).toLocaleDateString('sv-SE') === t).length;
+}
+
+// 今日やるぶん: ①期限が来た復習 ②卒業組の再確認 ③1日の上限までの新しい型
+function dueList() {
+  const now = Date.now();
+  const shuffle = (arr) => arr.map(x => ({ x, r: Math.random() }))
+    .sort((a, b) => a.r - b.r).map(o => o.x);
+  const reviews = livePatterns().filter(p => isIntroduced(p) && (p.due || 0) <= now)
+    .sort((a, b) => (a.due || 0) - (b.due || 0));
+  const graduated = S.patterns.filter(p => isGraduated(p) && (p.due || 0) <= now);
+  const room = Math.max(0, (Number(S.settings.newPerDay) || 4) - newToday());
+  const fresh = shuffle(livePatterns().filter(p => !isIntroduced(p))).slice(0, room);
+  return reviews.concat(graduated, fresh);
+}
 
 function scorePattern(p, ok) {
   p.seen = (p.seen || 0) + 1;
+  if (!p.introducedAt) p.introducedAt = Date.now();
+  const wasGrad = isGraduated(p);
   if (ok) {
     p.ok = (p.ok || 0) + 1;
+    if (wasGrad) { p.due = Date.now() + REVIEW_2; return; }   // 再確認に通った
     p.streak = (p.streak || 0) + 1;
-    p.box = Math.min(BOX_DAYS.length - 1, (p.box || 0) + 1);
-    p.due = Date.now() + BOX_DAYS[p.box] * DAY;
-    if (p.streak >= 3) p.graduatedAt = Date.now();
+    if (p.streak >= 3) { p.graduatedAt = Date.now(); p.due = Date.now() + REVIEW_1; }
+    else p.due = Date.now() + DAY;                            // 卒業までは1日刻み
   } else {
     p.ng = (p.ng || 0) + 1;
-    p.streak = 0; p.box = 0; p.due = Date.now();
+    // 卒業組を落としたら丸ごと振り出しには戻さない。あと1回で戻れる位置に置く
+    p.streak = wasGrad ? 2 : 0;
+    p.due = Date.now();
   }
 }
 
@@ -490,11 +522,13 @@ function makeItem(p) {
   });
 }
 
-function buildSession(n = 8) {
-  let list = duePatterns();
-  if (list.length < n) {
-    const rest = livePatterns().filter(p => !list.includes(p));
-    list = list.concat(rest.slice(0, n - list.length));
+function buildSession(n = 8, ahead = false) {
+  let list = dueList();
+  if (ahead) {
+    // 期限前でも先にやる。何も出ない日を作らないための逃げ道
+    const more = livePatterns().filter(p => !list.includes(p))
+      .sort((a, b) => (a.due || 0) - (b.due || 0));
+    list = list.concat(more);
   }
   if (!list.length) return false;
   sess = { items: list.slice(0, n).map(makeItem), idx: 0, results: [], startedAt: Date.now() };
@@ -506,6 +540,8 @@ const RING_LEN = 465;
 let phase = 'ready';
 let clockT = 0, ttfwStart = 0, ttfw = null, speakStart = 0;
 let lastBlob = null, lastLocal = { ttfw: null, speakSec: 0 };
+let lastObjURL = null;
+let aheadMode = false;
 
 function setRing(frac, color) {
   $('ringArc').setAttribute('stroke-dashoffset', String(RING_LEN * (1 - Math.max(0, Math.min(1, frac)))));
@@ -528,7 +564,9 @@ async function renderItem() {
     $('qJa').textContent = S.settings.showJa ? (it.pattern.ja || '') : '';
   } else if (it.imageId) {
     const img = await IDB.get(it.imageId);
-    stage.innerHTML = img ? `<img src="${URL.createObjectURL(img)}" alt="">` : '';
+    if (lastObjURL) { URL.revokeObjectURL(lastObjURL); lastObjURL = null; }
+    if (img) { lastObjURL = URL.createObjectURL(img); stage.innerHTML = `<img src="${lastObjURL}" alt="">`; }
+    else stage.innerHTML = '';
     stage.style.display = img ? '' : 'none';
     $('qText').textContent = it.intentJa;
     $('qJa').textContent = 'これを英語で';
@@ -724,7 +762,8 @@ function endSession() {
   save();
   $('dOk').textContent = `${okN}/${rs.length}`;
   $('dTtfw').textContent = tt.length ? (tt.reduce((a, b) => a + b, 0) / tt.length).toFixed(1) : '–';
-  $('dLeft').textContent = livePatterns().length;
+  // 「あと1回で卒業」は、明日また開く理由になる数字
+  $('dLeft').textContent = S.patterns.filter(p => (p.streak || 0) === 2).length;
   const grad = S.patterns.filter(p => p.graduatedAt && Date.now() - p.graduatedAt < 3600e3);
   $('doneGrad').style.display = grad.length ? '' : 'none';
   $('doneGradList').innerHTML = grad.map(p =>
@@ -819,7 +858,7 @@ async function makePattern(inboxId, btn) {
 function streak() {
   const days = [...new Set(S.sessions.map(s => s.date))].sort().reverse();
   if (!days.length) return 0;
-  let n = 0; const d = new Date();
+  let n = 0; const d = new Date(Date.now());
   if (days[0] !== today()) d.setDate(d.getDate() - 1);
   for (;;) {
     const k = d.toLocaleDateString('sv-SE');
@@ -829,10 +868,13 @@ function streak() {
 }
 
 function refreshHome() {
-  const live = livePatterns().length;
-  const due = duePatterns().length;
-  $('hLeft').textContent = live;
+  const total = S.patterns.length;
+  const grad = S.patterns.filter(isGraduated).length;
+  const due = dueList().length;
+  // 主役は「今日やる型」。やれば必ず0になるので毎セッション動く。
+  // 「未習得」だけを出していた頃は最初の3日間ずっと30のままだった。
   $('hDue').textContent = due;
+  $('hGrad').textContent = `${grad}/${total}`;
   $('hStreak').textContent = streak();
   const nNew = S.inbox.filter(i => i.status === 'new').length;
   $('btnInbox').textContent = nNew ? `受信箱 ${nNew}` : '受信箱';
@@ -844,10 +886,15 @@ function refreshHome() {
     $('btnStart').disabled = true; $('btnCapture').disabled = true;
     return;
   }
-  $('btnStart').disabled = false; $('btnCapture').disabled = false;
-  $('homeNote').textContent = S.settings.apiKey.trim()
-    ? (due ? `今日やるべき型が ${due} 個` : '今日のぶんは終わっています。前倒しでやれます')
-    : '⚠ 設定でAPIキーを入れると判定が出ます';
+  // 期限が来ていなくても、やりたい日は前倒しでやれるようにする
+  aheadMode = !due && livePatterns().length > 0;
+  $('btnStart').textContent = aheadMode ? '前倒しでやる' : 'ドリルをやる';
+  $('btnStart').disabled = !due && !aheadMode;
+  $('btnCapture').disabled = false;
+  $('homeNote').textContent = !S.settings.apiKey.trim()
+    ? '⚠ 設定でAPIキーを入れると判定が出ます'
+    : due ? `${Math.min(due, 8)}問・3分ほど`
+      : '今日のぶんは終わりました。受信箱から型を足せます';
 }
 
 function renderPatterns() {
@@ -871,6 +918,7 @@ function renderSettings() {
   $('inKey').value = S.settings.apiKey;
   $('inModel').value = S.settings.model;
   $('inAnswerSec').value = String(S.settings.answerSec);
+  $('inNewPerDay').value = String(S.settings.newPerDay);
   $('tgSpeak').classList.toggle('on', !!S.settings.speakQuestion);
   $('tgJa').classList.toggle('on', !!S.settings.showJa);
   $$('#figChips .chip').forEach(c => c.classList.toggle('on', S.settings.figKinds.includes(c.dataset.fig)));
@@ -879,8 +927,11 @@ function renderSettings() {
 /* ════════ イベント配線 ════════ */
 $('btnStart').addEventListener('click', () => {
   warmTTS(); Mic.ensureCtx();
-  if (!buildSession()) { toast('全部卒業しました。受信箱から型を足してください'); return; }
-  renderItem(); show('drill');
+  if (!buildSession(8, aheadMode)) {
+    toast(livePatterns().length ? '今日のぶんは終わりました' : '全部卒業しました。受信箱から型を足してください');
+    return;
+  }
+  renderItem().then(() => show('drill'));
 });
 $('btnDrill').addEventListener('click', () => {
   Mic.ensureCtx();
@@ -896,7 +947,7 @@ $('btnQuit').addEventListener('click', async () => {
 $('btnNext').addEventListener('click', () => {
   speechSynthesis.cancel();
   if (sess.idx >= sess.items.length - 1) return endSession();
-  sess.idx++; renderItem(); show('drill');
+  sess.idx++; renderItem().then(() => show('drill'));
 });
 $('fbBody').addEventListener('click', e => {
   const say = e.target.closest('[data-say]');
@@ -931,6 +982,7 @@ $$('[data-back]').forEach(b => b.addEventListener('click', () => show(backTo)));
 $('inKey').addEventListener('change', e => { S.settings.apiKey = e.target.value.trim(); save(); refreshHome(); });
 $('inModel').addEventListener('change', e => { S.settings.model = e.target.value; save(); });
 $('inAnswerSec').addEventListener('change', e => { S.settings.answerSec = Number(e.target.value); save(); });
+$('inNewPerDay').addEventListener('change', e => { S.settings.newPerDay = Number(e.target.value); save(); refreshHome(); });
 $('tgSpeak').addEventListener('click', () => {
   S.settings.speakQuestion = !S.settings.speakQuestion;
   $('tgSpeak').classList.toggle('on', S.settings.speakQuestion); save();
