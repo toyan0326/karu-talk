@@ -19,9 +19,12 @@ const FACE = {
   // 唇の合わせ目。笑っているので直線ではなく曲線。左右の口角と中央の3点で表す。
   // 楕円で開けると口の形とずれて「貼り付けた口」に見えたので、実際のカーブに沿わせる。
   lip: { L: { x: 147, y: 250 }, R: { x: 216, y: 227 }, C: { x: 181, y: 236 } },
-  eyeL: { x: 121, y: 174, hw: 21, hh: 10 },
-  eyeR: { x: 206, y: 152, hw: 19, hh: 10 },
-  lidH: 9,                              // まぶたの上から借りる肌の帯（眉に届かない高さ）
+  // 目も唇と同じで、輪郭のカーブを実測して持つ。矩形で処理すると継ぎ目が出る。
+  //   a,b = 目頭と目尻 / top = 上まぶたの弧の制御点 / bot = 下まぶたの弧の制御点
+  eyes: [
+    { a: { x: 101, y: 178 }, b: { x: 138, y: 171 }, top: { x: 118, y: 157.5 }, bot: { x: 116, y: 193.5 } },
+    { a: { x: 189, y: 160 }, b: { x: 223, y: 152 }, top: { x: 206, y: 136 }, bot: { x: 204, y: 178 } },
+  ],
 };
 
 // 口の開き具合。[縦の開き, 横の広がり]（0〜1）
@@ -110,7 +113,7 @@ const Avatar = {
     if (now > this.blinkAt) {
       const p = (now - this.blinkAt) / 135;
       if (p >= 1) { this.blink = 0; this.blinkAt = now + 2400 + Math.random() * 3800; }
-      else this.blink = 1 - Math.abs(p - 0.5) * 2;
+      else this.blink = (1 - Math.abs(p - 0.5) * 2) * 0.92;   // 閉じきる直前で止める
     }
 
     // 画面いっぱいに、はみ出さないよう収める
@@ -172,15 +175,55 @@ const Avatar = {
     ctx.restore();
   },
 
-  /* まばたきは生成した中割りフレームを貼るだけ。
-     肌をコピーして伸ばすワープも試したが、四角い継ぎ目が出て明らかに破綻した。
-     素材が無い間は、まばたきはしない（下手に動かすより静止のほうがまし）。 */
+  /* まばたき。
+     最初は目の上の肌を矩形でコピーして伸ばしたが、四角い継ぎ目が丸見えで破綻した。
+     まぶたの縁のカーブでクリップすれば、境目が「まぶたの縁があるべき場所」に来るので
+     見えても不自然にならない。口を唇のカーブに沿わせたのと同じ考え方。
+     生成した中割りパッチ(face/frames.json)があればそちらを優先する。 */
   drawBlink(ctx) {
     const set = this.patches && this.patches.eyes;
-    if (!set || this.blink < 0.02) return;
-    const i = Math.min(set.length - 1, Math.round(this.blink * (set.length - 1)));
-    const p = set[i];
-    if (p) ctx.drawImage(p.im, p.x, p.y);
+    if (set && set.length) {
+      const i = Math.min(set.length - 1, Math.round(this.blink * (set.length - 1)));
+      const p = set[i];
+      if (p) ctx.drawImage(p.im, p.x, p.y);
+      return;
+    }
+    const k = this.blink;
+    if (k < 0.02) return;
+    for (const e of FACE.eyes) {
+      // いまのまぶたの縁: 上まぶたの弧 → 下まぶたの弧 へ k で降りていく
+      const cx = e.top.x + (e.bot.x - e.top.x) * k;
+      const cy = e.top.y + (e.bot.y - e.top.y) * k;
+      const lidTop = Math.min(e.a.y, e.b.y) - 17;      // まぶたの肌（眉には届かない）
+      const x0 = Math.min(e.a.x, e.b.x) - 6, x1 = Math.max(e.a.x, e.b.x) + 6;
+
+      ctx.save();
+      ctx.beginPath();                                   // 覆う範囲＝上の肌から現在の縁まで
+      ctx.moveTo(e.a.x - 2, e.a.y);
+      ctx.lineTo(x0, lidTop); ctx.lineTo(x1, lidTop);
+      ctx.lineTo(e.b.x + 2, e.b.y);
+      ctx.quadraticCurveTo(cx, cy, e.a.x - 2, e.a.y);
+      ctx.closePath();
+      ctx.clip();
+      // まぶたの肌を、現在の縁まで縦に引き伸ばす
+      const srcH = Math.max(4, e.a.y - lidTop);
+      const dstH = Math.max(srcH, cy - lidTop);
+      ctx.drawImage(this.img, x0, lidTop, x1 - x0, srcH, x0, lidTop, x1 - x0, dstH);
+      ctx.restore();
+
+      // まつ毛の線。境目をここに置くと、縁として自然に見える。
+      ctx.save();
+      ctx.filter = 'blur(0.9px)';
+      ctx.beginPath();
+      ctx.moveTo(e.a.x, e.a.y);
+      ctx.quadraticCurveTo(cx, cy, e.b.x, e.b.y);
+      // 濃く太くすると「描き足した線」に見える。うっすら影として置く程度に留める。
+      ctx.strokeStyle = `rgba(64,42,34,${(0.28 + 0.30 * k).toFixed(2)})`;
+      ctx.lineWidth = 1.0 + k * 0.7;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.restore();
+    }
   },
 
   /* テキスト → 口の形の並び。英語の口の見た目はほぼ母音で決まる。 */
