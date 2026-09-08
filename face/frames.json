@@ -3,61 +3,107 @@
  "eyes": [
   {
    "file": "eye-half.png",
-   "x": 88,
-   "y": 128
+   "x": 84,
+   "y": 126
   },
   {
    "file": "eye-almost.png",
-   "x": 88,
-   "y": 128
+   "x": 84,
+   "y": 126
   },
   {
    "file": "eye-closed.png",
-   "x": 88,
-   "y": 128
+   "x": 84,
+   "y": 126
   }
  ],
  "mouth": {
   "AA": [
    {
+    "file": "mouth-AA-half.png",
+    "x": 136,
+    "y": 202
+   },
+   {
     "file": "mouth-AA.png",
-    "x": 130,
-    "y": 208
+    "x": 136,
+    "y": 202
    }
   ],
   "E": [
    {
+    "file": "mouth-E-half.png",
+    "x": 136,
+    "y": 202
+   },
+   {
     "file": "mouth-E.png",
-    "x": 130,
-    "y": 208
+    "x": 136,
+    "y": 202
    }
   ],
   "I": [
    {
+    "file": "mouth-I-half.png",
+    "x": 136,
+    "y": 202
+   },
+   {
     "file": "mouth-I.png",
-    "x": 130,
-    "y": 208
+    "x": 136,
+    "y": 202
    }
   ],
   "O": [
    {
     "file": "mouth-O.png",
-    "x": 130,
-    "y": 208
+    "x": 136,
+    "y": 202
    }
   ],
   "U": [
    {
+    "file": "mouth-U-half.png",
+    "x": 136,
+    "y": 202
+   },
+   {
     "file": "mouth-U.png",
-    "x": 130,
-    "y": 208
+    "x": 136,
+    "y": 202
    }
   ],
   "FV": [
    {
+    "file": "mouth-FV-half.png",
+    "x": 136,
+    "y": 202
+   },
+   {
     "file": "mouth-FV.png",
-    "x": 130,
-    "y": 208
+    "x": 136,
+    "y": 202
+   }
+  ],
+  "MBP": [
+   {
+    "file": "mouth-MBP.png",
+    "x": 136,
+    "y": 202
+   }
+  ],
+  "L": [
+   {
+    "file": "mouth-L.png",
+    "x": 136,
+    "y": 202
+   }
+  ],
+  "S": [
+   {
+    "file": "mouth-S.png",
+    "x": 136,
+    "y": 202
    }
   ]
  }

@@ -29,20 +29,19 @@ const FACE = {
 
 // 口の開き具合。[縦の開き, 横の広がり]（0〜1）
 const VISEME = {
-  rest: [0.00, 0.00], MBP: [0.00, 0.00], FV: [0.14, 0.10], S: [0.16, 0.30],
+  rest: [0.00, 0.00], MBP: [0.30, 0.00], FV: [0.14, 0.10], S: [0.16, 0.30],
   AA: [1.00, 0.10], E: [0.48, 0.55], I: [0.32, 0.45], O: [0.72, -0.30],
   U: [0.46, -0.45], L: [0.55, 0.05],
 };
 
-// 生成パッチが無い口の形を、近い形に寄せる。
-// rest / MBP は「閉じた口」＝元画像そのものなのでパッチを貼らない。
-const VISEME_ALIAS = { L: 'AA', S: 'I', FV: 'FV' };
+// 実物のパッチが無い形の逃げ道。今は全形そろっているので通常は使われない。
+const VISEME_ALIAS = { L: 'AA', S: 'I', MBP: 'FV' };
 
 const Avatar = {
   host: null, cv: null, ctx: null, img: null, ready: false, raf: 0, t0: 0,
   patches: null,          // 生成フレーム（face/frames.json）があればこちらを使う
   blinkAt: 0, blink: 0,
-  target: 'rest', open: 0, wide: 0,
+  target: 'rest', shape: 'AA', open: 0, wide: 0,
   speaking: false, seq: null, seqI: -1, seqStart: 0, seqStep: 0,
 
   loadImg(src) {
@@ -109,10 +108,12 @@ const Avatar = {
 
     // 目標の口の形へなめらかに寄せる（瞬間で切り替えるとパクパクして安っぽい）
     const [to, tw] = VISEME[this.target] || VISEME.rest;
-    // 写真パッチは中間の形を作れないので補間しない。ワープ時だけなめらかに寄せる。
-    const k = this.patches ? 1 : 0.34;
-    this.open += (to - this.open) * k;
-    this.wide += (tw - this.wide) * (this.patches ? 1 : 0.28);
+    // 開き具合は補間する。パッチ運用では、その途中で「半開き」のコマを通る。
+    // 形そのものは写真なので混ぜられない＝直前の形を保持したまま開閉させる。
+    if (this.target !== 'rest' && this.target !== 'MBP') this.shape = this.target;
+    else if (this.target === 'MBP') this.shape = 'MBP';
+    this.open += (to - this.open) * (this.patches ? 0.45 : 0.34);
+    this.wide += (tw - this.wide) * (this.patches ? 0.45 : 0.28);
     if (this.speaking && this.seq) this.stepSeq(now);
 
     // まばたき
@@ -155,9 +156,10 @@ const Avatar = {
     const open = Math.max(0, this.open);
     const M = this.patches && this.patches.mouth;
     if (M) {
-      // 閉じた口は元画像そのもの。貼らないのが正解。
-      if (this.target === 'rest' || this.target === 'MBP') return;
-      const key = M[this.target] ? this.target : VISEME_ALIAS[this.target];
+      // 閉じた口は元画像そのもの。閉じきるまでは直前の形を薄く残して、
+      // ぱたっと消えないようにする。
+      if (open < 0.22) return;
+      const key = M[this.shape] ? this.shape : VISEME_ALIAS[this.shape];
       const set = key && M[key];
       if (set && set.length) {
         const i = Math.min(set.length - 1, Math.round(open * (set.length - 1)));
