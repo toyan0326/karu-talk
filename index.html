@@ -351,7 +351,7 @@
         <div class="muted2" style="margin:-4px 0 10px">
           相手が言った場所を聞き取って、図の上でタップして当てる問題が1セッションに2〜3問入ります。
         </div>
-        <label class="field" style="margin-bottom:0">
+        <label class="field">
           <span class="lb">読み上げの速さ</span>
           <select id="inListenRate">
             <option value="0.85">ゆっくり (0.85x)</option>
@@ -360,6 +360,26 @@
             <option value="1.3">かなり速い (1.3x) — 会議はこれくらい</option>
           </select>
         </label>
+        <label class="field">
+          <span class="lb">声</span>
+          <select id="inVoice"></select>
+        </label>
+        <label class="field">
+          <span class="lb">声の高さ（上げるほど若く聞こえます）</span>
+          <select id="inPitch">
+            <option value="0.9">低め</option>
+            <option value="1">ふつう</option>
+            <option value="1.15">やや高い</option>
+            <option value="1.3">高い</option>
+            <option value="1.45">かなり高い</option>
+          </select>
+        </label>
+        <button class="ghost" id="btnVoiceTest">🔊 この声で試す</button>
+        <div class="muted2" id="voiceNote" style="margin-top:8px"></div>
+        <div class="muted2" style="margin-top:8px">
+          iPhoneなら <b style="color:var(--dim)">設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語</b>
+          から高音質の声（Ava・Zoe・Nicky など）を追加できます。標準の声より格段に自然です。
+        </div>
       </div>
       <div class="card">
         <div class="sw"><span>質問を読み上げる</span><button class="toggle on" id="tgSpeak"></button></div>
@@ -391,6 +411,6 @@
 <script src="avatar.js?v=12"></script>
 <script src="patterns.js?v=9"></script>
 <script src="figures.js?v=9"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

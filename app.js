@@ -20,6 +20,7 @@ const DEFAULTS = {
     speakQuestion: true, showJa: false, figKinds: ['plan', 'section', 'chart'],
     newPerDay: 4,
     listening: false, listenRate: 1, avatar: true,
+    voice: '', pitch: 1.15,
   },
   patterns: [],   // 型。これが学習の単位
   inbox: [],      // 「言えなかった」受信箱
@@ -147,15 +148,53 @@ const today = () => new Date(Date.now()).toLocaleDateString('sv-SE'); // YYYY-MM
 
 /* ════════ 読み上げ ════════ */
 let enVoice = null;
+// macOS には効果音のような声が大量に入っている。喋らせても使い物にならないので出さない。
+// 名前はOSの言語で localize されるので、日本語名も落とす。
+const JOKE_VOICES = new RegExp('^(' + [
+  'Albert', 'Bad News', 'Bahh', 'Bells', 'Boing', 'Bubbles', 'Cellos', 'Deranged',
+  'Good News', 'Hysterical', 'Jester', 'Organ', 'Pipe Organ', 'Superstar', 'Trinoids',
+  'Whisper', 'Wobble', 'Zarvox', 'Junior', 'Princess', 'Ralph', 'Kathy', 'Fred',
+  'Bruce', 'Agnes', 'Vicki', 'Victoria', 'Grandma', 'Grandpa',
+  'オルガン', 'パイプオルガン', 'ささやき声', 'スーパースター', 'トリノイド', 'ベル', '鐘',
+  '震え', '道化', '泡', 'チェロ', '悪い知らせ', '良い知らせ', '風変わり', 'ヒステリック',
+  'ザーボックス', '王女', 'おばあちゃん', 'おじいちゃん', '少年', 'アルバート',
+].join('|') + ')', 'i');
+// 若く自然に聞こえるものを上に出す
+const NICE_VOICES = ['Ava', 'Zoe', 'Nicky', 'Allison', 'Samantha', 'Susan', 'Serena',
+  'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Karen', 'Tessa', 'Moira'];
+
+function enVoices() {
+  if (!('speechSynthesis' in window)) return [];
+  return speechSynthesis.getVoices()
+    .filter(v => /^en(-|_)/i.test(v.lang) && !JOKE_VOICES.test(v.name));
+}
+function niceFirst(vs) {
+  const score = (v) => {
+    const i = NICE_VOICES.findIndex(n => v.name.includes(n));
+    let k = i < 0 ? 50 : i;
+    if (/premium|enhanced/i.test(v.name)) k -= 0.5;   // 高音質版があればそちらを先に
+    return k;
+  };
+  return vs.slice().sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name));
+}
 function pickVoice() {
-  const vs = speechSynthesis.getVoices().filter(v => /^en(-|_)/i.test(v.lang));
+  const vs = enVoices();
   if (!vs.length) return null;
-  const pref = ['Samantha', 'Ava', 'Allison', 'Google US English', 'Karen', 'Daniel'];
-  for (const p of pref) { const v = vs.find(v => v.name.includes(p)); if (v) return v; }
-  return vs.find(v => /en[-_]US/i.test(v.lang)) || vs[0];
+  // 設定で選ばれた声があればそれ
+  if (S && S.settings && S.settings.voice) {
+    const hit = vs.find(v => v.name === S.settings.voice);
+    if (hit) return hit;
+  }
+  // 自動: 若く明るく聞こえる声を先に。Samantha は落ち着いた声なので後ろへ。
+  const ranked = niceFirst(vs);
+  return ranked.find(v => /en[-_]US/i.test(v.lang)) || ranked[0];
 }
 if ('speechSynthesis' in window) {
-  speechSynthesis.onvoiceschanged = () => { enVoice = pickVoice(); };
+  // 声の一覧は非同期で届く。届いたら設定画面が開いていれば選択肢を作り直す。
+  speechSynthesis.onvoiceschanged = () => {
+    enVoice = pickVoice();
+    if ($('settings') && $('settings').classList.contains('on')) renderSettings();
+  };
   enVoice = pickVoice();
 }
 // iOSは最初の発話がユーザー操作の中でないと無音になるので、開始タップで一度空打ちする
@@ -174,7 +213,8 @@ function speak(text, rate = 0.95) {
     const go = () => {
       const u = new SpeechSynthesisUtterance(text);
       u.lang = 'en-US'; u.rate = rate;
-      if (!enVoice) enVoice = pickVoice();
+      u.pitch = Number(S.settings.pitch) || 1;   // 上げるほど若く聞こえる
+      enVoice = pickVoice();
       if (enVoice) u.voice = enVoice;
       let started = false, retried = false;
       u.onstart = () => { started = true; };
@@ -1052,6 +1092,19 @@ function renderSettings() {
   $('inAnswerSec').value = String(S.settings.answerSec);
   $('inNewPerDay').value = String(S.settings.newPerDay);
   $('inListenRate').value = String(S.settings.listenRate);
+  $('inPitch').value = String(S.settings.pitch);
+  const vs = niceFirst(enVoices());
+  const opt = v => `<option value="${esc(v.name)}">${esc(v.name)}</option>`;
+  const good = vs.filter(v => NICE_VOICES.some(n => v.name.includes(n)));
+  const rest = vs.filter(v => !good.includes(v));
+  $('inVoice').innerHTML = '<option value="">自動で選ぶ</option>'
+    + (good.length ? `<optgroup label="おすすめ">${good.map(opt).join('')}</optgroup>` : '')
+    + (rest.length ? `<optgroup label="その他">${rest.map(opt).join('')}</optgroup>` : '');
+  $('inVoice').value = S.settings.voice;
+  const cur = pickVoice();
+  $('voiceNote').textContent = vs.length
+    ? `いま鳴る声: ${cur ? cur.name : '不明'}（この端末で使える英語の声 ${vs.length}種類）`
+    : '声の一覧をまだ取得できていません。少し待ってから開き直してください';
   $('tgListen').classList.toggle('on', !!S.settings.listening);
   $('tgAvatar').classList.toggle('on', !!S.settings.avatar);
   $('tgSpeak').classList.toggle('on', !!S.settings.speakQuestion);
@@ -1136,6 +1189,12 @@ $('tgListen').addEventListener('click', () => {
   $('tgListen').classList.toggle('on', S.settings.listening); save();
 });
 $('inListenRate').addEventListener('change', e => { S.settings.listenRate = Number(e.target.value); save(); });
+$('inVoice').addEventListener('change', e => { S.settings.voice = e.target.value; enVoice = null; save(); });
+$('inPitch').addEventListener('change', e => { S.settings.pitch = Number(e.target.value); save(); });
+$('btnVoiceTest').addEventListener('click', () => {
+  warmTTS();
+  speak('Where is the beam highlighted in red? Look at grid line two.', Number(S.settings.listenRate) || 1);
+});
 $('tgAvatar').addEventListener('click', () => {
   S.settings.avatar = !S.settings.avatar;
   $('tgAvatar').classList.toggle('on', S.settings.avatar);

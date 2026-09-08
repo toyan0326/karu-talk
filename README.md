@@ -114,6 +114,19 @@ patterns.js   組み込みの型30個（位置関係8 + 画面共有の決まり
 - 記録は `localStorage`（`karutalk.v2`）。**スクショだけ IndexedDB**（localStorageだとすぐ溢れる）。
   外に出るのは録音した音声・スクショ・APIキーだけで、送り先はGoogleのGemini APIのみ。
 
+### 声
+
+読み上げは端末の標準TTS。設定で**声とピッチを選べる**（ピッチを上げるほど若く聞こえる。既定1.15）。
+macOSには効果音のような声が大量に入っていて、名前はOSの言語で localize される（`オルガン` `道化` など）ので、
+英語名・日本語名の両方で除外している。自然に聞こえるものは「おすすめ」に分けて上に出す。
+
+**iPhoneは 設定→アクセシビリティ→読み上げコンテンツ→声→英語 から高音質の声を追加できる**
+（Ava / Zoe / Nicky など）。標準の声より格段に自然で、これが一番効く。
+
+より根本的には [HeadTTS](https://github.com/met4citizen/HeadTTS)（MIT、Kokoro神経TTS）が
+ブラウザ内で動き、**音素レベルのタイムスタンプとビゼームIDまで出せる**。
+声質も口の同期精度も上がるが、初回のモデル読み込みが重くWebGPU前提なので未導入。
+
 ## 使い方
 
 1. 設定で **Gemini APIキー** を入れる（[Google AI Studio](https://aistudio.google.com/apikey)）。端末のlocalStorageにだけ保存される。
