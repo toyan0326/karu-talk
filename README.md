@@ -181,8 +181,16 @@ python3 tools/make-face-frames.py --dry-run
 
 `avatar.js` は `face/frames.json` があれば自動でパッチ方式に切り替わり、無ければ口のワープに戻る。
 
-**注意: 画像生成は無料枠だと1日の上限がすぐ尽きる**（`GenerateRequestsPerDayPerProjectPerModel-FreeTier`）。
-429 が出たら日を改めるか、課金を有効にしてから実行する。28枚ぶんのリクエストが必要。
+**注意: このAPIキーの無料枠には画像生成の割当が無い（実測で確定）。**
+
+- 全54モデルをページングして確認 → 画像モデルは7つ、**Imagen系は存在しない**
+- `responseModalities` 3通り × エンドポイント `v1`/`v1beta` を試して全部同じ 429
+- 太平洋時間の日付が変わった後、**3時間にわたり37回**叩き続けたが全部 429
+  （`GenerateRequestsPerDayPerProjectPerModel-FreeTier`）。同じ鍵でテキストモデルは通る
+
+つまり「使い切った」のではなく**無料枠に画像生成の枠が無い**。待っても復活しない。
+使うには**課金を有効にする**（9枚なら数十円）か、別の手段で作った画像を
+`tools/FRAMES-REQUEST.md` の手順で持ち込む。
 
 ## まだやっていないこと
 
