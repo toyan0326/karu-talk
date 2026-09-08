@@ -21,89 +21,89 @@
   "AA": [
    {
     "file": "mouth-AA-half.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    },
    {
     "file": "mouth-AA.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "E": [
    {
     "file": "mouth-E-half.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    },
    {
     "file": "mouth-E.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "I": [
    {
     "file": "mouth-I-half.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    },
    {
     "file": "mouth-I.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "O": [
    {
     "file": "mouth-O.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "U": [
    {
     "file": "mouth-U-half.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    },
    {
     "file": "mouth-U.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "FV": [
    {
     "file": "mouth-FV-half.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    },
    {
     "file": "mouth-FV.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "MBP": [
    {
     "file": "mouth-MBP.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "L": [
    {
     "file": "mouth-L.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ],
   "S": [
    {
     "file": "mouth-S.png",
-    "x": 136,
-    "y": 202
+    "x": 140,
+    "y": 206
    }
   ]
  }
