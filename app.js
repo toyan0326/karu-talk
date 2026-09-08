@@ -540,7 +540,10 @@ function dueList() {
   const reviews = livePatterns().filter(p => isIntroduced(p) && (p.due || 0) <= now)
     .sort((a, b) => (a.due || 0) - (b.due || 0));
   const graduated = S.patterns.filter(p => isGraduated(p) && (p.due || 0) <= now);
-  const room = Math.max(0, (Number(S.settings.newPerDay) || 4) - newToday());
+  const backlog = reviews.length + graduated.length;
+  const room = Math.max(0, Math.min(
+    (Number(S.settings.newPerDay) || 4) - newToday(),
+    6 - backlog));                       // 復習が溜まっている日は新しい型を足さない
   const fresh = shuffle(livePatterns().filter(p => !isIntroduced(p))).slice(0, room);
   return reviews.concat(graduated, fresh);
 }
@@ -602,6 +605,8 @@ function makeItem(p) {
   });
 }
 
+// 復習が溜まっているのに新しい型を下ろし続けると、1日1問の使い方だと山が崩れなくなる。
+// 溜まっている間は新規投入を止める。
 function buildSession(n = 8, ahead = false) {
   let list = dueList();
   if (ahead) {
@@ -630,7 +635,18 @@ function buildSession(n = 8, ahead = false) {
     }));
     items.unshift(...heads);
   }
-  sess = { items, idx: 0, results: [], startedAt: Date.now() };
+  sess = { items, idx: 0, results: [], startedAt: Date.now(), openEnded: n === 1 };
+  return true;
+}
+
+// 「もう1問」。いま出していない型から1つ足して次へ進む。
+function addOneMore() {
+  const used = new Set(sess.items.map(i => i.pattern.id));
+  const next = dueList().find(p => !used.has(p.id))
+    || livePatterns().filter(p => !used.has(p.id)).sort((a, b) => (a.due || 0) - (b.due || 0))[0];
+  if (!next) return false;
+  sess.items.push(makeItem(next));
+  sess.idx = sess.items.length - 1;
   return true;
 }
 
@@ -882,9 +898,7 @@ function showFeedback(fb, note) {
       <span class="badge ${fb.ok ? '' : 'warn'}">${fb.ok ? '通じています' : 'もう一歩'}</span>
       <div style="margin-top:9px; font-size:14.5px">${esc(fb.whyJa)}</div></div>`;
 
-    h += `<div class="card"><div class="sect">言ったこと</div>
-      <div class="said">${esc(fb.transcript)}</div></div>`;
-
+    // 一番見たいのはここ。まずこれだけ出す。
     if (fb.edits && fb.edits.length) {
       h += `<div class="card"><div class="sect">最小の手直し（${fb.edits.length}ヶ所）</div>` +
         fb.edits.map(e => `<div class="fix">
@@ -898,15 +912,20 @@ function showFeedback(fb, note) {
         <button class="playbtn" data-say="${esc(fb.minimalEdit)}">🔊 聞く</button></div>`;
     }
 
-    h += `<div class="card"><div class="sect">もう一段スムーズに</div>
-      <div class="up">"${esc(fb.better)}"</div>
-      <button class="playbtn" data-say="${esc(fb.better)}">🔊 聞く</button></div>`;
-
+    // 残りは畳んでおく。1問30秒の使い方で毎回読ませると重くなる。
+    h += `<div class="card"><details><summary>もっと見る（お手本・チャンク・書き起こし）</summary>
+      <div style="margin-top:12px">
+        <div class="sect">もう一段スムーズに</div>
+        <div class="up">"${esc(fb.better)}"</div>
+        <button class="playbtn" data-say="${esc(fb.better)}">🔊 聞く</button>
+      </div>`;
     if (fb.chunks && fb.chunks.length) {
-      h += `<div class="card"><div class="sect">次に使うチャンク</div>` +
+      h += `<div style="margin-top:14px"><div class="sect">次に使うチャンク</div>` +
         fb.chunks.map(c => `<div class="chunk"><span class="en">${esc(c.en)}</span>
           <span class="ja">${esc(c.ja)}</span></div>`).join('') + `</div>`;
     }
+    h += `<div style="margin-top:14px"><div class="sect">言ったこと</div>
+      <div class="said">${esc(fb.transcript)}</div></div></details></div>`;
   }
 
   if (it.truth) {
@@ -915,7 +934,14 @@ function showFeedback(fb, note) {
   }
 
   $('fbBody').innerHTML = h;
-  $('btnNext').textContent = (sess.idx >= sess.items.length - 1) ? '終える' : '次へ';
+  // 1問ずつの使い方では、次を促すのが主。まとめてやる時は従来どおり。
+  if (sess.openEnded) {
+    $('btnNext').textContent = 'もう1問';
+    $('btnQuitFb').style.display = '';
+  } else {
+    $('btnNext').textContent = (sess.idx >= sess.items.length - 1) ? '終える' : '次へ';
+    $('btnQuitFb').style.display = 'none';
+  }
   show('fb');
 }
 
@@ -1055,17 +1081,17 @@ function refreshHome() {
   if (!window.isSecureContext || !navigator.mediaDevices) {
     $('homeNote').innerHTML = '⚠ このURLはHTTPSではないためマイクが使えません<br>'
       + '<span style="color:var(--dim2)">HTTPSで開くか、Mac上の http://localhost で開いてください</span>';
-    $('btnStart').disabled = true; $('btnCapture').disabled = true;
+    $('btnStart').disabled = $('btnOne').disabled = true; $('btnCapture').disabled = true;
     return;
   }
   // 期限が来ていなくても、やりたい日は前倒しでやれるようにする
   aheadMode = !due && livePatterns().length > 0;
-  $('btnStart').textContent = aheadMode ? '前倒しでやる' : 'ドリルをやる';
-  $('btnStart').disabled = !due && !aheadMode;
+  $('btnStart').textContent = aheadMode ? 'まとめて前倒し' : 'まとめて8問';
+  $('btnStart').disabled = $('btnOne').disabled = !due && !aheadMode;
   $('btnCapture').disabled = false;
   $('homeNote').textContent = !S.settings.apiKey.trim()
     ? '⚠ 設定でAPIキーを入れると判定が出ます'
-    : due ? `${Math.min(due, 8)}問・3分ほど`
+    : due ? `1問なら30秒。まとめてやるなら${Math.min(due, 8)}問で3分ほど`
       : '今日のぶんは終わりました。受信箱から型を足せます';
 }
 
@@ -1113,6 +1139,12 @@ function renderSettings() {
 }
 
 /* ════════ イベント配線 ════════ */
+$('btnOne').addEventListener('click', () => {
+  warmTTS(); Mic.ensureCtx();
+  if (!buildSession(1, aheadMode)) { toast('今日のぶんは終わりました'); return; }
+  renderItem().then(() => show('drill'));
+});
+$('btnQuitFb').addEventListener('click', () => { speechSynthesis.cancel(); endSession(); });
 $('btnStart').addEventListener('click', () => {
   warmTTS(); Mic.ensureCtx();
   if (!buildSession(8, aheadMode)) {
@@ -1145,6 +1177,10 @@ $('btnQuit').addEventListener('click', async () => {
 });
 $('btnNext').addEventListener('click', () => {
   speechSynthesis.cancel();
+  if (sess.openEnded) {                       // 1問ずつ: やめるまで継ぎ足す
+    if (!addOneMore()) return endSession();
+    return void renderItem().then(() => show('drill'));
+  }
   if (sess.idx >= sess.items.length - 1) return endSession();
   sess.idx++; renderItem().then(() => show('drill'));
 });
