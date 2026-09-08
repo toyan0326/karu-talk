@@ -1,0 +1,64 @@
+{
+ "base": "../emi.jpg",
+ "eyes": [
+  {
+   "file": "eye-half.png",
+   "x": 88,
+   "y": 128
+  },
+  {
+   "file": "eye-almost.png",
+   "x": 88,
+   "y": 128
+  },
+  {
+   "file": "eye-closed.png",
+   "x": 88,
+   "y": 128
+  }
+ ],
+ "mouth": {
+  "AA": [
+   {
+    "file": "mouth-AA.png",
+    "x": 130,
+    "y": 208
+   }
+  ],
+  "E": [
+   {
+    "file": "mouth-E.png",
+    "x": 130,
+    "y": 208
+   }
+  ],
+  "I": [
+   {
+    "file": "mouth-I.png",
+    "x": 130,
+    "y": 208
+   }
+  ],
+  "O": [
+   {
+    "file": "mouth-O.png",
+    "x": 130,
+    "y": 208
+   }
+  ],
+  "U": [
+   {
+    "file": "mouth-U.png",
+    "x": 130,
+    "y": 208
+   }
+  ],
+  "FV": [
+   {
+    "file": "mouth-FV.png",
+    "x": 130,
+    "y": 208
+   }
+  ]
+ }
+}

@@ -1,5 +1,22 @@
 # アバターの中割りフレームを作ってもらうための指示書
 
+> **第1弾（目3枚＋口6枚）は受領・組み込み済み。** 生成された画像は emi.jpg の局所編集ではなく
+> 引きの違う別生成だったが、**一律1.27倍のスケール差**だったため、編集領域の外側で合わせる
+> 位置合わせで吸収できた（残差5.5〜8.5）。以下は次に欲しいもの。
+
+## 第2弾でほしいもの（効果の大きい順）
+
+| 優先 | ファイル名 | 指示 | 理由 |
+|---|---|---|---|
+| **高** | `mouth-AA-half.png` 他6枚 | 上の口の形それぞれを **half open**（半開き）で | 今は「閉じ→全開」で飛ぶ。中間があると口の動きが滑らかになる |
+| 中 | `mouth-MBP.png` | lips pressed firmly together, as when saying "m" | 今は閉じた元画像で代用。m/b/p が他と同じ見た目になっている |
+| 中 | `mouth-L.png` | tongue tip touching behind the upper teeth | 今は AA で代用 |
+| 中 | `mouth-S.png` | teeth close together, mouth barely open, as when saying "s" | 今は I で代用 |
+| 低 | `eye-quarter.png` | eyelids about one quarter lowered | まばたきが4段階になる |
+
+**第1弾と同じ引き・同じ人物で**作ってください（1.27倍の引きの違いはこちらで吸収します）。
+
+
 `emi.jpg`（360x418）を渡して、**目と口だけを描き替えた画像**を作る。
 できた画像をこちらに渡してもらえれば、領域の切り出し・縁のぼかし・位置合わせ・組み込みまでやる。
 

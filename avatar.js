@@ -34,6 +34,10 @@ const VISEME = {
   U: [0.46, -0.45], L: [0.55, 0.05],
 };
 
+// 生成パッチが無い口の形を、近い形に寄せる。
+// rest / MBP は「閉じた口」＝元画像そのものなのでパッチを貼らない。
+const VISEME_ALIAS = { L: 'AA', S: 'I', FV: 'FV' };
+
 const Avatar = {
   host: null, cv: null, ctx: null, img: null, ready: false, raf: 0, t0: 0,
   patches: null,          // 生成フレーム（face/frames.json）があればこちらを使う
@@ -105,30 +109,41 @@ const Avatar = {
 
     // 目標の口の形へなめらかに寄せる（瞬間で切り替えるとパクパクして安っぽい）
     const [to, tw] = VISEME[this.target] || VISEME.rest;
-    this.open += (to - this.open) * 0.34;
-    this.wide += (tw - this.wide) * 0.28;
+    // 写真パッチは中間の形を作れないので補間しない。ワープ時だけなめらかに寄せる。
+    const k = this.patches ? 1 : 0.34;
+    this.open += (to - this.open) * k;
+    this.wide += (tw - this.wide) * (this.patches ? 1 : 0.28);
     if (this.speaking && this.seq) this.stepSeq(now);
 
     // まばたき
     if (now > this.blinkAt) {
       const p = (now - this.blinkAt) / 135;
       if (p >= 1) { this.blink = 0; this.blinkAt = now + 2400 + Math.random() * 3800; }
-      else this.blink = (1 - Math.abs(p - 0.5) * 2) * 0.92;   // 閉じきる直前で止める
+      else this.blink = (1 - Math.abs(p - 0.5) * 2) * (this.patches ? 1 : 0.92);
     }
 
-    // 画面いっぱいに、はみ出さないよう収める
-    const scale = Math.min(cv.width / FACE.w, cv.height / FACE.h);
+    // 画面いっぱいに収める。回転で四隅が欠けないよう少しだけ大きめに描く。
+    const scale = Math.max(cv.width / FACE.w, cv.height / FACE.h) * 1.02;
     const ox = (cv.width - FACE.w * scale) / 2, oy = (cv.height - FACE.h * scale) / 2;
 
     ctx.save();
     ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.beginPath(); ctx.rect(0, 0, cv.width, cv.height); ctx.clip();
     ctx.translate(ox, oy); ctx.scale(scale, scale);
 
-    // 呼吸と首の揺れ
-    const sway = Math.sin(t * 0.55) * 2.2, bob = Math.sin(t * 0.83) * 1.5;
-    ctx.translate(FACE.w / 2 + sway, FACE.h / 2 + bob);
-    ctx.rotate(Math.sin(t * 0.55) * 0.006);
-    ctx.translate(-FACE.w / 2, -FACE.h / 2);
+    // 首の動き。単一のサイン波だと周期が読めて機械的に見えるので、
+    // 比が無理数に近い波を重ねて繰り返しを感じさせない。
+    // 回転の軸は首の付け根あたり。頭の中心で回すと首から上だけが振れて不自然になる。
+    const n = (a, b, c) => Math.sin(t * a) * 0.6 + Math.sin(t * b + 1.7) * 0.3 + Math.sin(t * c + 3.1) * 0.1;
+    const swayX = n(0.37, 0.61, 1.13) * 3.4;
+    const swayY = n(0.29, 0.53, 0.97) * 2.2;
+    const tilt = n(0.23, 0.41, 0.79) * 0.020;      // ラジアン（±1.1度ほど）
+    const breathe = 1 + Math.sin(t * 0.62) * 0.006;
+
+    ctx.translate(FACE.w / 2 + swayX, 392 + swayY);  // 首の付け根あたりを軸に
+    ctx.rotate(tilt);
+    ctx.scale(breathe, breathe);
+    ctx.translate(-FACE.w / 2, -392);
 
     ctx.drawImage(this.img, 0, 0);
     this.drawMouth(ctx);
@@ -138,12 +153,18 @@ const Avatar = {
 
   drawMouth(ctx) {
     const open = Math.max(0, this.open);
-    // 生成パッチがあれば、開き具合に一番近いフレームを貼る
-    const set = this.patches && this.patches.mouth && this.patches.mouth[this.target];
-    if (set && set.length) {
-      const i = Math.min(set.length - 1, Math.round(open * (set.length - 1)));
-      const p = set[i];
-      if (p) { ctx.drawImage(p.im, p.x, p.y); return; }
+    const M = this.patches && this.patches.mouth;
+    if (M) {
+      // 閉じた口は元画像そのもの。貼らないのが正解。
+      if (this.target === 'rest' || this.target === 'MBP') return;
+      const key = M[this.target] ? this.target : VISEME_ALIAS[this.target];
+      const set = key && M[key];
+      if (set && set.length) {
+        const i = Math.min(set.length - 1, Math.round(open * (set.length - 1)));
+        const p = set[i];
+        if (p) { ctx.drawImage(p.im, p.x, p.y); return; }
+      }
+      return;                       // パッチ運用中はワープに落とさない（混ざると汚い）
     }
     if (open <= 0.02) return;
     const P = FACE.lip;
@@ -183,8 +204,10 @@ const Avatar = {
   drawBlink(ctx) {
     const set = this.patches && this.patches.eyes;
     if (set && set.length) {
-      const i = Math.min(set.length - 1, Math.round(this.blink * (set.length - 1)));
-      const p = set[i];
+      // 開いた目は元画像。閉じ具合に応じて 半分→ほぼ→完全 を貼る。
+      if (this.blink < 0.18) return;
+      const t = (this.blink - 0.18) / 0.82;
+      const p = set[Math.min(set.length - 1, Math.floor(t * set.length))];
       if (p) ctx.drawImage(p.im, p.x, p.y);
       return;
     }
